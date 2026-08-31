@@ -81,6 +81,27 @@ function boardWidths(rng: Rng, span: number): number[] {
 }
 
 const BOARD_GAP = 0.007;
+const END_GAP = 0.01;
+const MAX_SECTION = 1.35;
+
+/** Split a board's length into end-jointed sections; seeded per board, so
+ * joints stagger naturally across neighboring boards. */
+function sectionLengths(rng: Rng, length: number): number[] {
+  if (length <= MAX_SECTION) return [length];
+  const sections: number[] = [];
+  let remaining = length;
+  while (remaining > MAX_SECTION) {
+    const s = 0.65 + rng() * 0.6;
+    sections.push(s);
+    remaining -= s;
+  }
+  if (remaining < 0.3 && sections.length > 0) {
+    sections[sections.length - 1] += remaining;
+  } else {
+    sections.push(remaining);
+  }
+  return sections;
+}
 
 /**
  * A tabletop as actual carpentry: boards laid along the long axis, each with
@@ -126,19 +147,26 @@ function buildPlankedTop(
       length = (alongX ? width : depth) * (0.99 + jitter(rng, 0.01));
     }
 
-    const board = new BoxGeometry(length, thickness, Math.max(0.04, bw - BOARD_GAP));
-    scaleUV(board, Math.max(1, length), 0.35);
-    offsetUV(board, rng() * 4, rng() * 4);
-    board.applyMatrix4(
-      new Matrix4()
-        .makeRotationY(alongX ? 0 : Math.PI / 2)
-        .setPosition(
-          alongX ? jitter(rng, 0.008) : center,
-          y + jitter(rng, 0.0035),
-          alongX ? center : jitter(rng, 0.008),
-        ),
-    );
-    pieces.push(paint(board, worn(rng, shade(tone, 1 + jitter(rng, 0.07)))));
+    const boardTone = shade(tone, 1 + jitter(rng, 0.07));
+    const boardY = y + jitter(rng, 0.0035);
+    let along = -length / 2;
+    for (const sec of sectionLengths(rng, length)) {
+      const secCenter = along + sec / 2;
+      along += sec;
+      const section = new BoxGeometry(Math.max(0.05, sec - END_GAP), thickness, Math.max(0.04, bw - BOARD_GAP));
+      scaleUV(section, Math.max(1, sec), 0.35);
+      offsetUV(section, rng() * 4, rng() * 4);
+      section.applyMatrix4(
+        new Matrix4()
+          .makeRotationY(alongX ? 0 : Math.PI / 2)
+          .setPosition(
+            alongX ? secCenter : center,
+            boardY + jitter(rng, 0.0015),
+            alongX ? center : secCenter,
+          ),
+      );
+      pieces.push(paint(section, worn(rng, boardTone)));
+    }
   }
 }
 

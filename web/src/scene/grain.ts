@@ -21,6 +21,19 @@ export function woodGrainTexture(): THREE.Texture | null {
   ctx.fillStyle = '#e8e2d6';
   ctx.fillRect(0, 0, size, size);
 
+  // Draw every feature at all nine wrap offsets so the tile is seamless in
+  // both axes — otherwise each texture repeat shows a hard cutoff line.
+  const wrapped = (draw: () => void) => {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      for (let oy = -1; oy <= 1; oy += 1) {
+        ctx.save();
+        ctx.translate(ox * size, oy * size);
+        draw();
+        ctx.restore();
+      }
+    }
+  };
+
   // Long horizontal streaks in layered low alpha = grain running along U.
   for (let i = 0; i < 520; i += 1) {
     const y = Math.random() * size;
@@ -28,26 +41,32 @@ export function woodGrainTexture(): THREE.Texture | null {
     const x = Math.random() * size - len / 2;
     const dark = Math.random() < 0.72;
     const alpha = 0.03 + Math.random() * 0.09;
+    const w1 = (Math.random() - 0.5) * 3;
+    const w2 = (Math.random() - 0.5) * 3;
     ctx.strokeStyle = dark ? `rgba(70, 52, 34, ${alpha})` : `rgba(255, 248, 235, ${alpha})`;
     ctx.lineWidth = 0.6 + Math.random() * 1.6;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    // slight waver so streaks aren't ruler-straight
-    ctx.bezierCurveTo(x + len * 0.3, y + (Math.random() - 0.5) * 3, x + len * 0.7, y + (Math.random() - 0.5) * 3, x + len, y);
-    ctx.stroke();
+    wrapped(() => {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      // slight waver so streaks aren't ruler-straight
+      ctx.bezierCurveTo(x + len * 0.3, y + w1, x + len * 0.7, y + w2, x + len, y);
+      ctx.stroke();
+    });
   }
 
   // A few knots.
   for (let i = 0; i < 5; i += 1) {
     const cx = Math.random() * size;
     const cy = Math.random() * size;
-    for (let r = 6; r > 1; r -= 1.5) {
-      ctx.strokeStyle = `rgba(60, 44, 28, ${0.05 + (6 - r) * 0.015})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r * 1.6, r, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    wrapped(() => {
+      for (let r = 6; r > 1; r -= 1.5) {
+        ctx.strokeStyle = `rgba(60, 44, 28, ${0.05 + (6 - r) * 0.015})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r * 1.6, r, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
   }
 
   const texture = new THREE.CanvasTexture(canvas);
