@@ -4,7 +4,9 @@ import {
   BufferGeometry,
   Color,
   CylinderGeometry,
+  ExtrudeGeometry,
   Matrix4,
+  Shape,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { jitter, mulberry32, type Rng } from './rng';
@@ -104,6 +106,30 @@ function sectionLengths(rng: Rng, length: number): number[] {
 }
 
 /**
+ * A board cut to a circle: a strip from z0..z1 whose ends follow the arc.
+ * Extruded in XY then rotated flat; arc sampled coarsely so the rim stays
+ * faceted in-style.
+ */
+function roundBoard(z0: number, z1: number, radius: number, thickness: number): BufferGeometry {
+  const X = (z: number) => Math.sqrt(Math.max(0.0009, radius * radius - z * z));
+  const N = 5;
+  const shape = new Shape();
+  shape.moveTo(X(z0), z0);
+  for (let i = 1; i <= N; i += 1) {
+    const z = z0 + ((z1 - z0) * i) / N;
+    shape.lineTo(X(z), z);
+  }
+  for (let i = 0; i <= N; i += 1) {
+    const z = z1 + ((z0 - z1) * i) / N;
+    shape.lineTo(-X(z), z);
+  }
+  shape.closePath();
+  const geometry = new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
+/**
  * A tabletop as actual carpentry: boards laid along the long axis, each with
  * its own width, tone, grain offset, hair-height offset, and slightly
  * staggered ends. Round tops clip board lengths to the circle's chords,
@@ -127,7 +153,7 @@ function buildPlankedTop(
 
   const under =
     shape === 'round'
-      ? new CylinderGeometry(radius * 0.98, radius * 0.98, thickness * 0.5, 9)
+      ? new CylinderGeometry(radius * 0.97, radius * 0.97, thickness * 0.5, 14)
       : new BoxGeometry((alongX ? width : depth) * 0.985, thickness * 0.5, span * 0.985);
   if (shape !== 'round' && !alongX) under.applyMatrix4(new Matrix4().makeRotationY(Math.PI / 2));
   under.applyMatrix4(new Matrix4().setPosition(0, y - thickness * 0.25, 0));
@@ -139,16 +165,23 @@ function buildPlankedTop(
     const center = cursor + bw / 2;
     cursor += bw;
 
-    let length: number;
-    if (shape === 'round') {
-      const reach = Math.max(0.05, radius * radius - center * center);
-      length = 2 * Math.sqrt(reach) * (0.98 + jitter(rng, 0.015));
-    } else {
-      length = (alongX ? width : depth) * (0.99 + jitter(rng, 0.01));
-    }
-
     const boardTone = shade(tone, 1 + jitter(rng, 0.07));
     const boardY = y + jitter(rng, 0.0035);
+
+    if (shape === 'round') {
+      // Full-length boards cut to the circle's arc — the top was assembled
+      // square and sawn round, like real carpentry.
+      const z0 = Math.max(-radius + 0.01, center - bw / 2 + BOARD_GAP / 2);
+      const z1 = Math.min(radius - 0.01, center + bw / 2 - BOARD_GAP / 2);
+      if (z1 - z0 < 0.03) continue;
+      const board = roundBoard(z0, z1, radius * 0.995, thickness);
+      offsetUV(board, rng() * 4, rng() * 4);
+      board.applyMatrix4(new Matrix4().setPosition(jitter(rng, 0.004), boardY - thickness / 2, 0));
+      pieces.push(paint(board, worn(rng, boardTone)));
+      continue;
+    }
+
+    const length = (alongX ? width : depth) * (0.99 + jitter(rng, 0.01));
     let along = -length / 2;
     for (const sec of sectionLengths(rng, length)) {
       const secCenter = along + sec / 2;
