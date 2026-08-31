@@ -4,15 +4,17 @@ import type { GameTable } from './module_bindings/types';
 import type { Selection } from './selection';
 import TableScene from './scene/TableScene';
 import Toolbar from './ui/Toolbar';
+import ImportLab from './lab/ImportLab';
 
-function useSlug(): string | null {
-  const [slug, setSlug] = useState(() => parseSlug());
+function useRoute(): { slug: string | null; lab: boolean } {
+  const read = () => ({ slug: parseSlug(), lab: window.location.hash.startsWith('#/lab') });
+  const [route, setRoute] = useState(read);
   useEffect(() => {
-    const onHash = () => setSlug(parseSlug());
+    const onHash = () => setRoute(read());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  return slug;
+  return route;
 }
 
 function parseSlug(): string | null {
@@ -23,7 +25,7 @@ function parseSlug(): string | null {
 
 export default function App() {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  const slug = useSlug();
+  const { slug, lab } = useRoute();
   const [name, setName] = useState(() => sessionStorage.getItem('display_name') ?? '');
   const [selection, setSelection] = useState<Selection>(null);
 
@@ -39,6 +41,9 @@ export default function App() {
     joinedFor.current = key;
     reducers().joinTable({ slug, displayName: name });
   }, [snap.subscribed, slug, table, name]);
+
+  // The import lab needs no table connection.
+  if (lab) return <ImportLab />;
 
   if (!snap.connected || !snap.subscribed) {
     return <div className="center-note">connecting to table server…</div>;
