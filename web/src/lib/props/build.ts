@@ -10,7 +10,7 @@ import { jitter, type Rng } from './rng';
 import { shade } from './palette';
 
 export const BOARD_GAP = 0.007;
-export const END_GAP = 0.01;
+export const END_GAP = 0.006;
 const MAX_SECTION = 1.35;
 
 /** Paint every vertex of a geometry one flat color. */

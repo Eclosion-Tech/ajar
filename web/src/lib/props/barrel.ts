@@ -88,7 +88,7 @@ function addLid(
   const thickness = 0.035;
   const under = new CylinderGeometry(radius * 0.9, radius * 0.9, thickness * 0.45, 12);
   under.applyMatrix4(new Matrix4().setPosition(0, height - thickness * 0.75, 0));
-  pieces.push(paint(under, shade(tone, 0.28)));
+  pieces.push(paint(under, shade(tone, 0.52)));
 
   let z = -radius;
   for (const boardWidth of boardWidths(rng, radius * 2)) {
@@ -122,7 +122,10 @@ export function buildBarrel(params: BarrelParams, seed: number): BufferGeometry 
   for (let i = 0; i < hoopCount; i += 1) {
     const fraction = hoopCount === 2 ? 0.2 + i * 0.6 : 0.16 + i * 0.34;
     const fromMiddle = Math.abs(fraction - 0.5) * 2;
-    const hoopRadius = radius * (1.085 - fromMiddle * 0.09);
+    // Proud of the staves' corner radius everywhere: the hoop N-gon's flat
+    // faces (inradius = R·cos(π/N)) must clear the staves' outer corners plus
+    // the mid-barrel bulge, or staves punch through as black notches.
+    const hoopRadius = radius * (1.2 - fromMiddle * 0.1);
     const hoop = new CylinderGeometry(hoopRadius, hoopRadius, hoopHeight, staveCount, 1, true);
     offsetUV(hoop, rng() * 2, rng() * 2);
     hoop.applyMatrix4(

@@ -61,7 +61,7 @@ function addSidePanel(
   under.applyMatrix4(
     new Matrix4().setPosition(axis === 'x' ? 0 : fixed, height / 2, axis === 'x' ? fixed : 0),
   );
-  pieces.push(paint(under, shade(tone, 0.28)));
+  pieces.push(paint(under, shade(tone, 0.52)));
 
   let y = 0;
   for (const boardHeight of boardWidths(rng, height)) {
@@ -101,7 +101,7 @@ function addPlankedTop(
   const thickness = 0.045;
   const under = new BoxGeometry(width * 0.98, thickness * 0.45, depth * 0.98);
   under.applyMatrix4(new Matrix4().setPosition(0, height - thickness * 0.75, 0));
-  pieces.push(paint(under, shade(tone, 0.28)));
+  pieces.push(paint(under, shade(tone, 0.52)));
 
   let z = -depth / 2;
   for (const boardWidth of boardWidths(rng, depth)) {

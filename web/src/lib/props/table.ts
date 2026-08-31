@@ -71,7 +71,7 @@ function buildPlankedTop(
       : new BoxGeometry((alongX ? width : depth) * 0.985, thickness * 0.5, span * 0.985);
   if (shape !== 'round' && !alongX) under.applyMatrix4(new Matrix4().makeRotationY(Math.PI / 2));
   under.applyMatrix4(new Matrix4().setPosition(0, y - thickness * 0.25, 0));
-  pieces.push(paint(under, shade(tone, 0.28)));
+  pieces.push(paint(under, shade(tone, 0.52)));
 
   const widths = boardWidths(rng, span);
   let cursor = -span / 2;
@@ -80,7 +80,7 @@ function buildPlankedTop(
     cursor += bw;
 
     const boardTone = shade(tone, 1 + jitter(rng, 0.07));
-    const boardY = y + jitter(rng, 0.0035);
+    const boardY = y + jitter(rng, 0.002);
 
     if (shape === 'round') {
       // Full-length boards cut to the circle's arc — the top was assembled
