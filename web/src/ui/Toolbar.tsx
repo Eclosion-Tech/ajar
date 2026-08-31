@@ -112,6 +112,68 @@ export default function Toolbar({
       >
         + table
       </button>
+      <button
+        onClick={() => {
+          const { x, z } = spawnSpot();
+          const styles = ['stool', 'chair', 'bench'] as const;
+          const style = styles[Math.floor(Math.random() * styles.length)];
+          const params = {
+            style,
+            width:
+              style === 'stool'
+                ? 0.36 + Math.random() * 0.1
+                : style === 'bench'
+                  ? 1.1 + Math.random() * 0.7
+                  : 0.45 + Math.random() * 0.14,
+            wood: Math.floor(Math.random() * WOOD_TONES.length),
+          };
+          reducers().spawnProp({ tableId, kind: 'seat', params: JSON.stringify(params), seed: randomSeed(), x, z });
+        }}
+      >
+        + seat
+      </button>
+      <button
+        onClick={() => {
+          const { x, z } = spawnSpot();
+          const params = {
+            radius: 0.27 + Math.random() * 0.1,
+            height: 0.62 + Math.random() * 0.2,
+            wood: Math.floor(Math.random() * WOOD_TONES.length),
+          };
+          reducers().spawnProp({ tableId, kind: 'barrel', params: JSON.stringify(params), seed: randomSeed(), x, z });
+        }}
+      >
+        + barrel
+      </button>
+      <button
+        onClick={() => {
+          const { x, z } = spawnSpot();
+          const params = {
+            width: 0.6 + Math.random() * 0.3,
+            depth: 0.45 + Math.random() * 0.2,
+            height: 0.45 + Math.random() * 0.2,
+            wood: Math.floor(Math.random() * WOOD_TONES.length),
+          };
+          reducers().spawnProp({ tableId, kind: 'crate', params: JSON.stringify(params), seed: randomSeed(), x, z });
+        }}
+      >
+        + crate
+      </button>
+      <button
+        onClick={() => {
+          const { x, z } = spawnSpot();
+          const width = 0.75 + Math.random() * 0.3;
+          const params = {
+            width,
+            depth: width * (0.55 + Math.random() * 0.12),
+            height: width * (0.55 + Math.random() * 0.14),
+            wood: Math.floor(Math.random() * WOOD_TONES.length),
+          };
+          reducers().spawnProp({ tableId, kind: 'chest', params: JSON.stringify(params), seed: randomSeed(), x, z });
+        }}
+      >
+        + chest
+      </button>
       {importNote && <span className="role-note">{importNote}</span>}
       <span className="sep" />
       <button
