@@ -16,13 +16,16 @@ entities enforced server-side.
 
 ```bash
 spacetime start                                  # local SpacetimeDB (terminal 1)
-spacetime publish 3dvtt -p server/spacetimedb    # build + publish the module
-spacetime generate --lang typescript --out-dir web/src/module_bindings -p server/spacetimedb
+spacetime publish 3dvtt --module-path server/spacetimedb    # build + publish the module
+spacetime generate --lang typescript --out-dir web/src/module_bindings --module-path server/spacetimedb
 pnpm install
 pnpm --filter web dev                            # client on http://localhost:5173
 ```
 
 Open two browser tabs, create a table in one, join by link in the other.
+
+`pnpm smoke` runs a headless two-client test against the local instance: sync,
+DM-only auth, and the RLS guarantee that players never receive hidden rows.
 
 ## License
 
