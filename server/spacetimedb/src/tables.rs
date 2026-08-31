@@ -119,6 +119,23 @@ pub struct MapImage {
     pub offset_z: f32,
 }
 
+#[table(accessor = prop, public)]
+pub struct Prop {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    #[index(btree)]
+    pub table_id: u64,
+    pub dm_identity: Identity,
+    pub kind: String,
+    pub params: String,
+    pub seed: u64,
+    pub x: f32,
+    pub z: f32,
+    pub rot_y: f32,
+    pub hidden: bool,
+}
+
 #[table(accessor = migration_state)]
 pub struct MigrationState {
     #[primary_key]

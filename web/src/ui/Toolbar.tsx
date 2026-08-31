@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { reducers } from '../stdb';
 import { EntityKind } from '../module_bindings/types';
-import type { Entity } from '../module_bindings/types';
+import type { Entity, Prop } from '../module_bindings/types';
 import { imageBlob, isUvttError, parse, toLights, toWallSegments } from '../lib/uvtt';
+import { normalizeTableParams, WOOD_TONES, type TableParams } from '../lib/props';
+
+const randomSeed = () => BigInt(Math.floor(Math.random() * 0xffffffff));
 
 const BLOBD_URI = (import.meta.env.VITE_BLOBD_URI as string | undefined) ?? 'http://localhost:8787';
 
@@ -15,10 +18,12 @@ function spawnSpot(): { x: number; z: number } {
 export default function Toolbar({
   tableId,
   selected,
+  selectedProp,
   onDeselect,
 }: {
   tableId: bigint;
   selected: Entity | null;
+  selectedProp: Prop | null;
   onDeselect: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -91,6 +96,22 @@ export default function Toolbar({
       />
       <button onClick={() => fileRef.current?.click()}>import map</button>
       <button onClick={() => reducers().clearWalls({ tableId })}>clear walls</button>
+      <button
+        onClick={() => {
+          const { x, z } = spawnSpot();
+          const round = Math.random() < 0.4;
+          const params: TableParams = {
+            shape: round ? 'round' : 'rect',
+            width: round ? 1.2 + Math.random() * 0.5 : 1.4 + Math.random() * 0.8,
+            depth: 0.8 + Math.random() * 0.3,
+            height: 0.72 + Math.random() * 0.06,
+            wood: Math.floor(Math.random() * WOOD_TONES.length),
+          };
+          reducers().spawnProp({ tableId, kind: 'table', params: JSON.stringify(params), seed: randomSeed(), x, z });
+        }}
+      >
+        + table
+      </button>
       {importNote && <span className="role-note">{importNote}</span>}
       <span className="sep" />
       <button
@@ -127,6 +148,114 @@ export default function Toolbar({
           </button>
         </>
       )}
+      {selectedProp && <PropPanel prop={selectedProp} tableId={tableId} onDeselect={onDeselect} />}
     </div>
   );
+}
+
+function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint; onDeselect: () => void }) {
+  const params = normalizeTableParams(safeParse(prop.params));
+  const throttle = useRef<{ timer: ReturnType<typeof setTimeout> | null; next: TableParams | null }>({
+    timer: null,
+    next: null,
+  });
+  useEffect(() => {
+    const t = throttle.current;
+    return () => {
+      if (t.timer) clearTimeout(t.timer);
+    };
+  }, []);
+
+  // Live-edit sync: send at most every 120ms (trailing) so slider drags stream
+  // as a handful of row updates, not hundreds.
+  function send(next: TableParams) {
+    const t = throttle.current;
+    t.next = next;
+    if (t.timer) return;
+    t.timer = setTimeout(() => {
+      t.timer = null;
+      if (t.next) reducers().updatePropParams({ propId: prop.id, params: JSON.stringify(t.next) });
+      t.next = null;
+    }, 120);
+  }
+
+  return (
+    <>
+      <span className="sep" />
+      <span className="selected-name">{prop.kind}</span>
+      <button onClick={() => send({ ...params, shape: params.shape === 'round' ? 'rect' : 'round' })}>
+        {params.shape}
+      </button>
+      <label className="slider">
+        w
+        <input
+          type="range"
+          min={0.5}
+          max={4}
+          step={0.05}
+          value={params.width}
+          onChange={(e) => send({ ...params, width: Number(e.target.value) })}
+        />
+      </label>
+      {params.shape === 'rect' && (
+        <label className="slider">
+          d
+          <input
+            type="range"
+            min={0.5}
+            max={4}
+            step={0.05}
+            value={params.depth}
+            onChange={(e) => send({ ...params, depth: Number(e.target.value) })}
+          />
+        </label>
+      )}
+      <span className="swatches">
+        {WOOD_TONES.map((tone, i) => (
+          <button
+            key={tone}
+            className={`swatch ${params.wood === i ? 'swatch-active' : ''}`}
+            style={{ background: `#${tone.toString(16).padStart(6, '0')}` }}
+            onClick={() => send({ ...params, wood: i })}
+          />
+        ))}
+      </span>
+      <button
+        onClick={() => {
+          // Reroll the jitter: respawn in place with a fresh seed.
+          reducers().spawnProp({
+            tableId,
+            kind: prop.kind,
+            params: JSON.stringify(params),
+            seed: randomSeed(),
+            x: prop.x,
+            z: prop.z,
+          });
+          reducers().deleteProp({ propId: prop.id });
+          onDeselect();
+        }}
+      >
+        reroll
+      </button>
+      <button onClick={() => reducers().setPropHidden({ propId: prop.id, hidden: !prop.hidden })}>
+        {prop.hidden ? 'reveal' : 'hide'}
+      </button>
+      <button
+        onClick={() => {
+          reducers().deleteProp({ propId: prop.id });
+          onDeselect();
+        }}
+      >
+        delete
+      </button>
+    </>
+  );
+}
+
+function safeParse(json: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
 }

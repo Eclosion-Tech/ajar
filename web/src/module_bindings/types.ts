@@ -93,6 +93,20 @@ export const Participant = __t.object("Participant", {
 });
 export type Participant = __Infer<typeof Participant>;
 
+export const Prop = __t.object("Prop", {
+  id: __t.u64(),
+  tableId: __t.u64(),
+  dmIdentity: __t.identity(),
+  kind: __t.string(),
+  params: __t.string(),
+  seed: __t.u64(),
+  x: __t.f32(),
+  z: __t.f32(),
+  rotY: __t.f32(),
+  hidden: __t.bool(),
+});
+export type Prop = __Infer<typeof Prop>;
+
 // The tagged union or sum type for the algebraic type `Role`.
 export const Role = __t.enum("Role", {
   Dm: __t.unit(),

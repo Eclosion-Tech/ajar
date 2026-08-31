@@ -1,5 +1,5 @@
 import { DbConnection } from './module_bindings';
-import type { Entity, GameTable, Light, MapImage, Participant, Wall } from './module_bindings/types';
+import type { Entity, GameTable, Light, MapImage, Participant, Prop, Wall } from './module_bindings/types';
 import type { Identity } from 'spacetimedb';
 
 export type Snapshot = {
@@ -12,6 +12,7 @@ export type Snapshot = {
   walls: Wall[];
   lights: Light[];
   mapImages: MapImage[];
+  props: Prop[];
 };
 
 type Listener = () => void;
@@ -29,6 +30,7 @@ class Store {
   private walls = new Map<string, Wall>();
   private lights = new Map<string, Light>();
   private mapImages = new Map<string, MapImage>();
+  private props = new Map<string, Prop>();
   private snapshot: Snapshot = {
     connected: false,
     subscribed: false,
@@ -39,6 +41,7 @@ class Store {
     walls: [],
     lights: [],
     mapImages: [],
+    props: [],
   };
 
   subscribe = (fn: Listener) => {
@@ -58,6 +61,7 @@ class Store {
       walls: [...this.walls.values()],
       lights: [...this.lights.values()],
       mapImages: [...this.mapImages.values()],
+      props: [...this.props.values()],
     };
     this.listeners.forEach((fn) => fn());
   }
@@ -83,6 +87,7 @@ class Store {
             'SELECT * FROM wall',
             'SELECT * FROM light',
             'SELECT * FROM map_image',
+            'SELECT * FROM prop',
           ]);
         this.bump({ connected: true, identity });
       })
@@ -153,6 +158,18 @@ class Store {
     });
     conn.db.map_image.onDelete((_ctx, row) => {
       this.mapImages.delete(row.id.toString());
+      this.bump();
+    });
+    conn.db.prop.onInsert((_ctx, row) => {
+      this.props.set(row.id.toString(), row);
+      this.bump();
+    });
+    conn.db.prop.onUpdate((_ctx, _old, row) => {
+      this.props.set(row.id.toString(), row);
+      this.bump();
+    });
+    conn.db.prop.onDelete((_ctx, row) => {
+      this.props.delete(row.id.toString());
       this.bump();
     });
   }

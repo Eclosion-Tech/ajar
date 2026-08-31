@@ -277,6 +277,89 @@ pub fn clear_map_image(ctx: &ReducerContext, table_id: u64) -> Result<(), String
     Ok(())
 }
 
+#[reducer]
+pub fn spawn_prop(
+    ctx: &ReducerContext,
+    table_id: u64,
+    kind: String,
+    params: String,
+    seed: u64,
+    x: f32,
+    z: f32,
+) -> Result<(), String> {
+    let table = require_table_dm(ctx, table_id)?;
+    if params.len() > 4096 {
+        return Err("prop params cannot exceed 4096 bytes".to_string());
+    }
+
+    ctx.db.prop().insert(Prop {
+        id: 0,
+        table_id,
+        dm_identity: table.dm_identity,
+        kind,
+        params,
+        seed,
+        x,
+        z,
+        rot_y: 0.0,
+        hidden: false,
+    });
+    Ok(())
+}
+
+#[reducer]
+pub fn update_prop_params(
+    ctx: &ReducerContext,
+    prop_id: u64,
+    params: String,
+) -> Result<(), String> {
+    let mut prop = find_prop(ctx, prop_id)?;
+    require_table_dm(ctx, prop.table_id)?;
+    if params.len() > 4096 {
+        return Err("prop params cannot exceed 4096 bytes".to_string());
+    }
+
+    prop.params = params;
+    ctx.db.prop().id().update(prop);
+    Ok(())
+}
+
+#[reducer]
+pub fn move_prop(
+    ctx: &ReducerContext,
+    prop_id: u64,
+    x: f32,
+    z: f32,
+    rot_y: f32,
+) -> Result<(), String> {
+    let mut prop = find_prop(ctx, prop_id)?;
+    require_table_dm(ctx, prop.table_id)?;
+
+    prop.x = x;
+    prop.z = z;
+    prop.rot_y = rot_y;
+    ctx.db.prop().id().update(prop);
+    Ok(())
+}
+
+#[reducer]
+pub fn set_prop_hidden(ctx: &ReducerContext, prop_id: u64, hidden: bool) -> Result<(), String> {
+    let mut prop = find_prop(ctx, prop_id)?;
+    require_table_dm(ctx, prop.table_id)?;
+
+    prop.hidden = hidden;
+    ctx.db.prop().id().update(prop);
+    Ok(())
+}
+
+#[reducer]
+pub fn delete_prop(ctx: &ReducerContext, prop_id: u64) -> Result<(), String> {
+    let prop = find_prop(ctx, prop_id)?;
+    require_table_dm(ctx, prop.table_id)?;
+    ctx.db.prop().id().delete(prop_id);
+    Ok(())
+}
+
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let participants: Vec<_> = ctx
@@ -301,6 +384,14 @@ fn find_entity(ctx: &ReducerContext, entity_id: u64) -> Result<Entity, String> {
         .id()
         .find(entity_id)
         .ok_or_else(|| "entity not found".to_string())
+}
+
+fn find_prop(ctx: &ReducerContext, prop_id: u64) -> Result<Prop, String> {
+    ctx.db
+        .prop()
+        .id()
+        .find(prop_id)
+        .ok_or_else(|| "prop not found".to_string())
 }
 
 fn delete_walls(ctx: &ReducerContext, table_id: u64) {

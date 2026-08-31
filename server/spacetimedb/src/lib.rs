@@ -11,3 +11,9 @@ const ENTITY_VISIBLE: Filter = Filter::Sql("SELECT * FROM entity WHERE hidden = 
 
 #[client_visibility_filter]
 const ENTITY_DM: Filter = Filter::Sql("SELECT * FROM entity WHERE dm_identity = :sender");
+
+#[client_visibility_filter]
+const PROP_VISIBLE: Filter = Filter::Sql("SELECT * FROM prop WHERE hidden = false");
+
+#[client_visibility_filter]
+const PROP_DM: Filter = Filter::Sql("SELECT * FROM prop WHERE dm_identity = :sender");

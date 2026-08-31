@@ -4,17 +4,20 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { wallSegmentsToGeometry } from '../lib/uvtt/geometry';
-import type { Entity, Light, MapImage, Wall } from '../module_bindings/types';
+import { buildProp } from '../lib/props';
+import { isSelected, type Selection } from '../selection';
+import type { Entity, Light, MapImage, Prop, Wall } from '../module_bindings/types';
 
 type Props = {
   entities: Entity[];
   walls: Wall[];
   lights: Light[];
   mapImage: MapImage | null;
+  props: Prop[];
   isDm: boolean;
-  selectedId: bigint | null;
-  onSelect: (id: bigint | null) => void;
-  onMove: (id: bigint, x: number, z: number) => void;
+  selection: Selection;
+  onSelect: (sel: Selection) => void;
+  onMove: (x: number, z: number) => void;
 };
 
 // Forward rendering pays for every light on every fragment: keep only the
@@ -45,7 +48,7 @@ function pickSpread(ranked: Light[], budget: number, minDist = 3.5): Light[] {
   return picked;
 }
 
-export default function TableScene({ entities, walls, lights, mapImage, isDm, selectedId, onSelect, onMove }: Props) {
+export default function TableScene({ entities, walls, lights, mapImage, props, isDm, selection, onSelect, onMove }: Props) {
   const lit = lights.length > 0;
   const realLights = useMemo(() => {
     const ranked = [...lights].sort((a, b) => b.intensity * b.range - a.intensity * a.range);
@@ -76,34 +79,68 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
           decay={1.6}
         />
       ))}
-      <Ground
-        onGroundClick={(x, z) => {
-          if (selectedId !== null) onMove(selectedId, x, z);
-        }}
-        onMiss={() => onSelect(null)}
-      />
+      <Ground onGroundClick={onMove} onMiss={() => onSelect(null)} />
       {mapImage && (
         <Suspense fallback={null}>
-          <MapFloor
-            image={mapImage}
-            onGroundClick={(x, z) => {
-              if (selectedId !== null) onMove(selectedId, x, z);
-            }}
-          />
+          <MapFloor image={mapImage} onGroundClick={onMove} />
         </Suspense>
       )}
       <MergedWalls walls={walls} />
+      {props.map((p) => (
+        <ProcProp
+          key={p.id.toString()}
+          prop={p}
+          dmGhost={isDm && p.hidden}
+          selected={isSelected(selection, 'prop', p.id)}
+          onClick={() => onSelect({ type: 'prop', id: p.id })}
+        />
+      ))}
       {entities.map((e) => (
         <Mini
           key={e.id.toString()}
           entity={e}
           dmGhost={isDm && e.hidden}
-          selected={e.id === selectedId}
-          onClick={() => onSelect(e.id)}
+          selected={isSelected(selection, 'mini', e.id)}
+          onClick={() => onSelect({ type: 'mini', id: e.id })}
         />
       ))}
       <OrbitControls makeDefault maxPolarAngle={Math.PI / 2.1} />
     </Canvas>
+  );
+}
+
+function ProcProp({
+  prop,
+  dmGhost,
+  selected,
+  onClick,
+}: {
+  prop: Prop;
+  dmGhost: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const geometry = useMemo(() => buildProp(prop.kind, prop.params, prop.seed), [prop.kind, prop.params, prop.seed]);
+  useEffect(() => () => geometry?.dispose(), [geometry]);
+  if (!geometry) return null;
+  return (
+    <group position={[prop.x, 0, prop.z]} rotation={[0, prop.rotY, 0]}>
+      <mesh
+        geometry={geometry}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+      >
+        <meshStandardMaterial vertexColors flatShading transparent={dmGhost} opacity={dmGhost ? 0.45 : 1} />
+      </mesh>
+      {selected && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+          <ringGeometry args={[0.6, 0.72, 32]} />
+          <meshBasicMaterial color="#ffd166" />
+        </mesh>
+      )}
+    </group>
   );
 }
 

@@ -38,6 +38,7 @@ function connect(label: string): Promise<Client> {
             'SELECT * FROM wall',
             'SELECT * FROM light',
             'SELECT * FROM map_image',
+            'SELECT * FROM prop',
           ]);
       })
       .onConnectError((_ctx, err) => {
@@ -189,6 +190,44 @@ await waitFor('map image upserted', () => {
   return rows.length === 1 && rows[0].url.endsWith('test2.png') ? rows : undefined;
 });
 check('set_map_image upserts a single row', true);
+
+// Parametric props: spawn + param edits sync; hidden props are RLS-gated;
+// players cannot edit.
+const tableParams = JSON.stringify({ shape: 'rect', width: 1.8, depth: 0.9, height: 0.75, wood: 1 });
+dm.conn.reducers.spawnProp({ tableId: table.id, kind: 'table', params: tableParams, seed: 99n, x: 2, z: 2 });
+dm.conn.reducers.spawnProp({ tableId: table.id, kind: 'chest', params: '{}', seed: 7n, x: 4, z: 4 });
+await waitFor('dm sees both props', () => {
+  const rows = [...dm.conn.db.prop.iter()].filter((p) => p.tableId === table.id);
+  return rows.length === 2 ? rows : undefined;
+});
+const chest = [...dm.conn.db.prop.iter()].find((p) => p.tableId === table.id && p.kind === 'chest')!;
+await dm.conn.reducers.setPropHidden({ propId: chest.id, hidden: true });
+await sleep(400);
+const playerProps = [...player.conn.db.prop.iter()].filter((p) => p.tableId === table.id);
+check(
+  'RLS: player sees only the visible prop',
+  playerProps.length === 1 && playerProps[0].kind === 'table',
+  `saw ${playerProps.length}: ${playerProps.map((p) => p.kind).join(',')}`,
+);
+
+const tableProp = playerProps[0];
+dm.conn.reducers.updatePropParams({
+  propId: tableProp.id,
+  params: JSON.stringify({ shape: 'round', width: 1.4, depth: 0.9, height: 0.75, wood: 2 }),
+});
+await waitFor('param edit reaches player', () => {
+  const row = [...player.conn.db.prop.iter()].find((p) => p.id === tableProp.id);
+  return row && row.params.includes('"round"') ? row : undefined;
+});
+check('prop param edit syncs to player replica', true);
+
+let propRejected = false;
+try {
+  await player.conn.reducers.updatePropParams({ propId: tableProp.id, params: '{}' });
+} catch (e) {
+  propRejected = String(e).includes('only the DM');
+}
+check('player cannot edit props', propRejected);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

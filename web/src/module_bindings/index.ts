@@ -39,14 +39,19 @@ import ClearMapImageReducer from "./clear_map_image_reducer";
 import ClearWallsReducer from "./clear_walls_reducer";
 import CreateTableReducer from "./create_table_reducer";
 import DeleteEntityReducer from "./delete_entity_reducer";
+import DeletePropReducer from "./delete_prop_reducer";
 import ImportLightsReducer from "./import_lights_reducer";
 import ImportWallsReducer from "./import_walls_reducer";
 import JoinTableReducer from "./join_table_reducer";
 import MoveEntityReducer from "./move_entity_reducer";
+import MovePropReducer from "./move_prop_reducer";
 import RunPendingMigrationsReducer from "./run_pending_migrations_reducer";
 import SetEntityHiddenReducer from "./set_entity_hidden_reducer";
 import SetMapImageReducer from "./set_map_image_reducer";
+import SetPropHiddenReducer from "./set_prop_hidden_reducer";
 import SpawnEntityReducer from "./spawn_entity_reducer";
+import SpawnPropReducer from "./spawn_prop_reducer";
+import UpdatePropParamsReducer from "./update_prop_params_reducer";
 
 // Import all procedure arg schemas
 
@@ -56,6 +61,7 @@ import GameTableRow from "./game_table_table";
 import LightRow from "./light_table";
 import MapImageRow from "./map_image_table";
 import ParticipantRow from "./participant_table";
+import PropRow from "./prop_table";
 import WallRow from "./wall_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -136,6 +142,20 @@ const tablesSchema = __schema({
       { name: 'participant_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ParticipantRow),
+  prop: __table({
+    name: 'prop',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'table_id', algorithm: 'btree', columns: [
+        'tableId',
+      ] },
+    ],
+    constraints: [
+      { name: 'prop_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PropRow),
   wall: __table({
     name: 'wall',
     indexes: [
@@ -159,14 +179,19 @@ const reducersSchema = __reducers(
   __reducerSchema("clear_walls", ClearWallsReducer),
   __reducerSchema("create_table", CreateTableReducer),
   __reducerSchema("delete_entity", DeleteEntityReducer),
+  __reducerSchema("delete_prop", DeletePropReducer),
   __reducerSchema("import_lights", ImportLightsReducer),
   __reducerSchema("import_walls", ImportWallsReducer),
   __reducerSchema("join_table", JoinTableReducer),
   __reducerSchema("move_entity", MoveEntityReducer),
+  __reducerSchema("move_prop", MovePropReducer),
   __reducerSchema("run_pending_migrations", RunPendingMigrationsReducer),
   __reducerSchema("set_entity_hidden", SetEntityHiddenReducer),
   __reducerSchema("set_map_image", SetMapImageReducer),
+  __reducerSchema("set_prop_hidden", SetPropHiddenReducer),
   __reducerSchema("spawn_entity", SpawnEntityReducer),
+  __reducerSchema("spawn_prop", SpawnPropReducer),
+  __reducerSchema("update_prop_params", UpdatePropParamsReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

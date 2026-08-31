@@ -67,3 +67,15 @@ button:hover { background: #31405c; }
 .badge-dm { background: #5f3a6e; }
 .sep { width: 1px; height: 18px; background: #3b4a63; }
 .selected-name { color: #ffd166; }
+
+.slider { display: flex; align-items: center; gap: 4px; font-size: 12px; opacity: 0.9; }
+.slider input[type='range'] { width: 72px; accent-color: #4cc9f0; }
+.swatches { display: flex; gap: 4px; }
+.swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  padding: 0;
+  border: 1px solid #1d2430;
+}
+.swatch-active { outline: 2px solid #ffd166; }

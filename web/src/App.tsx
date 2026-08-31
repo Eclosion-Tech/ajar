@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { store, reducers, sameIdentity } from './stdb';
 import type { GameTable } from './module_bindings/types';
+import type { Selection } from './selection';
 import TableScene from './scene/TableScene';
 import Toolbar from './ui/Toolbar';
 
@@ -24,7 +25,7 @@ export default function App() {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const slug = useSlug();
   const [name, setName] = useState(() => sessionStorage.getItem('display_name') ?? '');
-  const [selectedId, setSelectedId] = useState<bigint | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
 
   const table: GameTable | undefined = snap.tables.find((t) => t.slug === slug);
   const isDm = table ? sameIdentity(table.dmIdentity, snap.identity) : false;
@@ -63,6 +64,7 @@ export default function App() {
   const tableWalls = snap.walls.filter((w) => w.tableId === table.id);
   const tableLights = snap.lights.filter((l) => l.tableId === table.id);
   const tableMapImage = snap.mapImages.find((m) => m.tableId === table.id) ?? null;
+  const tableProps = snap.props.filter((p) => p.tableId === table.id);
   const tableParticipants = snap.participants.filter((p) => p.tableId === table.id && p.online);
 
   return (
@@ -72,10 +74,19 @@ export default function App() {
         walls={tableWalls}
         lights={tableLights}
         mapImage={tableMapImage}
+        props={tableProps}
         isDm={isDm}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onMove={(id, x, z) => reducers().moveEntity({ entityId: id, x, y: 0, z, rotY: 0 })}
+        selection={selection}
+        onSelect={setSelection}
+        onMove={(x, z) => {
+          if (!selection) return;
+          if (selection.type === 'mini') {
+            reducers().moveEntity({ entityId: selection.id, x, y: 0, z, rotY: 0 });
+          } else if (isDm) {
+            const prop = tableProps.find((p) => p.id === selection.id);
+            reducers().moveProp({ propId: selection.id, x, z, rotY: prop?.rotY ?? 0 });
+          }
+        }}
       />
       <div className="hud hud-top">
         <span className="table-name">{table.name}</span>
@@ -98,8 +109,13 @@ export default function App() {
       {isDm && (
         <Toolbar
           tableId={table.id}
-          selected={tableEntities.find((e) => e.id === selectedId) ?? null}
-          onDeselect={() => setSelectedId(null)}
+          selected={
+            selection?.type === 'mini' ? (tableEntities.find((e) => e.id === selection.id) ?? null) : null
+          }
+          selectedProp={
+            selection?.type === 'prop' ? (tableProps.find((p) => p.id === selection.id) ?? null) : null
+          }
+          onDeselect={() => setSelection(null)}
         />
       )}
     </div>
