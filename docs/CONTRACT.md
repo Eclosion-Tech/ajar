@@ -89,6 +89,28 @@ Public, no RLS. Reducers (DM-only): `import_lights(table_id, lights: Vec<LightIn
 Public. Reducers (DM-only): `set_map_image(table_id, url, width, height, offset_x, offset_z)`
 (insert or update the single row) and `clear_map_image(table_id)`.
 
+### `prop` (parametric procedural props — params are the asset)
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| table_id | u64 | btree index |
+| dm_identity | Identity | denormalized for RLS, like `entity` |
+| kind | String | generator name, e.g. `"table"` |
+| params | String | generator-specific JSON; reducers cap length at 4096 |
+| seed | u64 | deterministic jitter — same (kind, params, seed) ⇒ same mesh on every client |
+| x, z | f32 | position on ground plane |
+| rot_y | f32 | radians |
+| hidden | bool | DM-only when true (mimic chests are a feature) |
+
+RLS: the same two union-ed filters as `entity` (`hidden = false` OR `dm_identity = :sender`).
+
+Reducers (ALL DM-only via require_table_dm; `Result<(), String>`):
+- `spawn_prop(table_id: u64, kind: String, params: String, seed: u64, x: f32, z: f32)` — reject params.len() > 4096; rot_y = 0.
+- `update_prop_params(prop_id: u64, params: String)` — same length cap. Live slider edits stream through this (client throttles).
+- `move_prop(prop_id: u64, x: f32, z: f32, rot_y: f32)`
+- `set_prop_hidden(prop_id: u64, hidden: bool)`
+- `delete_prop(prop_id: u64)`
+
 ## Row-level security (the product feature)
 
 Two union-ed filters on `entity`, Pear idiom:
