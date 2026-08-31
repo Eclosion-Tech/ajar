@@ -21,7 +21,15 @@ type Props = {
 // strongest few as real point lights; the rest render as emissive glows.
 // Tunable while we calibrate: ?lights=24 raises the budget, ?tiled=1 tries
 // three's WebGPU tiled lighting (all lights real; falls back silently).
+// Params are accepted before the # or appended after the hash route; a change
+// needs one refresh since the renderer initializes once.
 const params = new URLSearchParams(window.location.search);
+const hashQuery = window.location.hash.split('?')[1];
+if (hashQuery) {
+  for (const [k, v] of new URLSearchParams(hashQuery)) {
+    if (!params.has(k)) params.set(k, v);
+  }
+}
 const POINT_LIGHT_BUDGET = Number(params.get('lights') ?? 12);
 const TILED = params.get('tiled') === '1';
 

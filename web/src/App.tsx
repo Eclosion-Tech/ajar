@@ -15,7 +15,8 @@ function useSlug(): string | null {
 }
 
 function parseSlug(): string | null {
-  const m = window.location.hash.match(/^#\/t\/([a-z0-9]+)$/);
+  // Tolerate query params in either position: ?tiled=1#/t/abc or #/t/abc?tiled=1
+  const m = window.location.hash.match(/^#\/t\/([a-z0-9]+)(?:[?&].*)?$/);
   return m ? m[1] : null;
 }
 
