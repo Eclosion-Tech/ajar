@@ -34,14 +34,18 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import ClearLightsReducer from "./clear_lights_reducer";
+import ClearMapImageReducer from "./clear_map_image_reducer";
 import ClearWallsReducer from "./clear_walls_reducer";
 import CreateTableReducer from "./create_table_reducer";
 import DeleteEntityReducer from "./delete_entity_reducer";
+import ImportLightsReducer from "./import_lights_reducer";
 import ImportWallsReducer from "./import_walls_reducer";
 import JoinTableReducer from "./join_table_reducer";
 import MoveEntityReducer from "./move_entity_reducer";
 import RunPendingMigrationsReducer from "./run_pending_migrations_reducer";
 import SetEntityHiddenReducer from "./set_entity_hidden_reducer";
+import SetMapImageReducer from "./set_map_image_reducer";
 import SpawnEntityReducer from "./spawn_entity_reducer";
 
 // Import all procedure arg schemas
@@ -49,6 +53,8 @@ import SpawnEntityReducer from "./spawn_entity_reducer";
 // Import all table schema definitions
 import EntityRow from "./entity_table";
 import GameTableRow from "./game_table_table";
+import LightRow from "./light_table";
+import MapImageRow from "./map_image_table";
 import ParticipantRow from "./participant_table";
 import WallRow from "./wall_table";
 
@@ -85,6 +91,34 @@ const tablesSchema = __schema({
       { name: 'game_table_slug_key', constraint: 'unique', columns: ['slug'] },
     ],
   }, GameTableRow),
+  light: __table({
+    name: 'light',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'table_id', algorithm: 'btree', columns: [
+        'tableId',
+      ] },
+    ],
+    constraints: [
+      { name: 'light_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, LightRow),
+  map_image: __table({
+    name: 'map_image',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'table_id', algorithm: 'btree', columns: [
+        'tableId',
+      ] },
+    ],
+    constraints: [
+      { name: 'map_image_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, MapImageRow),
   participant: __table({
     name: 'participant',
     indexes: [
@@ -120,14 +154,18 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("clear_lights", ClearLightsReducer),
+  __reducerSchema("clear_map_image", ClearMapImageReducer),
   __reducerSchema("clear_walls", ClearWallsReducer),
   __reducerSchema("create_table", CreateTableReducer),
   __reducerSchema("delete_entity", DeleteEntityReducer),
+  __reducerSchema("import_lights", ImportLightsReducer),
   __reducerSchema("import_walls", ImportWallsReducer),
   __reducerSchema("join_table", JoinTableReducer),
   __reducerSchema("move_entity", MoveEntityReducer),
   __reducerSchema("run_pending_migrations", RunPendingMigrationsReducer),
   __reducerSchema("set_entity_hidden", SetEntityHiddenReducer),
+  __reducerSchema("set_map_image", SetMapImageReducer),
   __reducerSchema("spawn_entity", SpawnEntityReducer),
 );
 

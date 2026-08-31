@@ -36,6 +36,8 @@ function connect(label: string): Promise<Client> {
             'SELECT * FROM participant',
             'SELECT * FROM entity',
             'SELECT * FROM wall',
+            'SELECT * FROM light',
+            'SELECT * FROM map_image',
           ]);
       })
       .onConnectError((_ctx, err) => {
@@ -161,6 +163,32 @@ try {
   wallRejected = String(e).includes('only the DM');
 }
 check('player cannot clear walls', wallRejected);
+
+// Lights + map image: DM imports both; map image upserts.
+dm.conn.reducers.importLights({
+  tableId: table.id,
+  lights: [
+    { x: 1, z: 1, range: 4, intensity: 1, colorRgb: 0xffcc88 },
+    { x: 3, z: 2, range: 5, intensity: 0.8, colorRgb: 0x88ccff },
+  ],
+});
+await waitFor('player sees lights', () => {
+  const rows = [...player.conn.db.light.iter()].filter((l) => l.tableId === table.id);
+  return rows.length === 2 ? rows : undefined;
+});
+check('light import syncs to player replica', true);
+
+dm.conn.reducers.setMapImage({
+  tableId: table.id, url: 'http://localhost:8787/blobs/test.png', width: 32, height: 22, offsetX: 0, offsetZ: 0,
+});
+dm.conn.reducers.setMapImage({
+  tableId: table.id, url: 'http://localhost:8787/blobs/test2.png', width: 30, height: 20, offsetX: 0, offsetZ: 0,
+});
+await waitFor('map image upserted', () => {
+  const rows = [...player.conn.db.map_image.iter()].filter((m) => m.tableId === table.id);
+  return rows.length === 1 && rows[0].url.endsWith('test2.png') ? rows : undefined;
+});
+check('set_map_image upserts a single row', true);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

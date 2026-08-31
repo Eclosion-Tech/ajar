@@ -60,6 +60,8 @@ export default function App() {
 
   const tableEntities = snap.entities.filter((e) => e.tableId === table.id);
   const tableWalls = snap.walls.filter((w) => w.tableId === table.id);
+  const tableLights = snap.lights.filter((l) => l.tableId === table.id);
+  const tableMapImage = snap.mapImages.find((m) => m.tableId === table.id) ?? null;
   const tableParticipants = snap.participants.filter((p) => p.tableId === table.id && p.online);
 
   return (
@@ -67,6 +69,8 @@ export default function App() {
       <TableScene
         entities={tableEntities}
         walls={tableWalls}
+        lights={tableLights}
+        mapImage={tableMapImage}
         isDm={isDm}
         selectedId={selectedId}
         onSelect={setSelectedId}

@@ -16,6 +16,7 @@ entities enforced server-side.
 
 ```bash
 spacetime start                                  # local SpacetimeDB (terminal 1)
+pnpm blobd                                       # blob store for map images (terminal 2)
 spacetime publish 3dvtt --module-path server/spacetimedb    # build + publish the module
 spacetime generate --lang typescript --out-dir web/src/module_bindings --module-path server/spacetimedb
 pnpm install

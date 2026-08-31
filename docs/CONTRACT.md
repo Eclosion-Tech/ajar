@@ -63,6 +63,32 @@ Additional reducers (both DM-only, `Result<(), String>`):
   semantics. Reject > 4096 walls.
 - `clear_walls(table_id: u64)`
 
+### `light` (synced from UVTT import; rendered as point lights)
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| table_id | u64 | btree index |
+| x, z | f32 | position (y implied ~wall-mid height client-side) |
+| range | f32 | |
+| intensity | f32 | |
+| color_rgb | u32 | 0xRRGGBB |
+
+Public, no RLS. Reducers (DM-only): `import_lights(table_id, lights: Vec<LightInput>)`
+(replace-all, cap 1024; `LightInput` mirrors the row minus id/table_id) and
+`clear_lights(table_id)`.
+
+### `map_image` (floor texture; the image itself lives in blob storage, not STDB)
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| table_id | u64 | btree index; one row per table (upsert in reducer) |
+| url | String | blob URL (dev: local blob sidecar; prod: blob store) |
+| width, height | f32 | world units |
+| offset_x, offset_z | f32 | world position of the image center |
+
+Public. Reducers (DM-only): `set_map_image(table_id, url, width, height, offset_x, offset_z)`
+(insert or update the single row) and `clear_map_image(table_id)`.
+
 ## Row-level security (the product feature)
 
 Two union-ed filters on `entity`, Pear idiom:

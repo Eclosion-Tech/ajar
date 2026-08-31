@@ -462,11 +462,32 @@ export function toWallSegments(map: UvttMap, opts: WallSegmentOptions = {}): Wal
   const height = opts.height ?? DEFAULT_WALL_HEIGHT;
   const thickness = opts.thickness ?? DEFAULT_WALL_THICKNESS;
   const segments: WallSegment[] = [];
-  const polylines = opts.includeObjects
-    ? [...map.lineOfSight, ...map.objectsLineOfSight]
-    : map.lineOfSight;
+  const sourced: { points: readonly WorldPoint[]; height: number }[] = map.lineOfSight.map(
+    (points) => ({ points, height }),
+  );
+  if (opts.includeObjects) {
+    // Object outlines are usually furniture, not architecture. Extrude small
+    // closed loops at furniture heights so candles and tables don't become
+    // full-height pillars; long/open runs (Arkenforge-style walls-as-objects)
+    // keep wall height.
+    for (const points of map.objectsLineOfSight) {
+      let perimeter = 0;
+      for (let i = 1; i < points.length; i += 1) {
+        perimeter += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
+      }
+      const first = points[0];
+      const last = points[points.length - 1];
+      const closed =
+        points.length > 2 &&
+        first !== undefined &&
+        last !== undefined &&
+        Math.hypot(first.x - last.x, first.z - last.z) < GEOMETRY_EPSILON;
+      const objectHeight = closed && perimeter < 2.5 ? 0.45 : closed && perimeter < 14 ? 0.9 : height;
+      sourced.push({ points, height: objectHeight });
+    }
+  }
 
-  for (const polyline of polylines) {
+  for (const { points: polyline, height: polylineHeight } of sourced) {
     for (let index = 1; index < polyline.length; index += 1) {
       const start = polyline[index - 1];
       const end = polyline[index];
@@ -492,7 +513,7 @@ export function toWallSegments(map: UvttMap, opts: WallSegmentOptions = {}): Wal
             az: wallStart.z,
             bx: wallEnd.x,
             bz: wallEnd.z,
-            height,
+            height: polylineHeight,
             thickness,
           });
         }
@@ -506,7 +527,7 @@ export function toWallSegments(map: UvttMap, opts: WallSegmentOptions = {}): Wal
           az: wallStart.z,
           bx: end.x,
           bz: end.z,
-          height,
+          height: polylineHeight,
           thickness,
         });
       }

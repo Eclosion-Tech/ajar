@@ -1,20 +1,25 @@
-import { useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Suspense, useRef } from 'react';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import type { Entity, Wall } from '../module_bindings/types';
+import type { Entity, Light, MapImage, Wall } from '../module_bindings/types';
 
 type Props = {
   entities: Entity[];
   walls: Wall[];
+  lights: Light[];
+  mapImage: MapImage | null;
   isDm: boolean;
   selectedId: bigint | null;
   onSelect: (id: bigint | null) => void;
   onMove: (id: bigint, x: number, z: number) => void;
 };
 
-export default function TableScene({ entities, walls, isDm, selectedId, onSelect, onMove }: Props) {
+const MAX_POINT_LIGHTS = 48;
+
+export default function TableScene({ entities, walls, lights, mapImage, isDm, selectedId, onSelect, onMove }: Props) {
+  const lit = lights.length > 0;
   return (
     <Canvas
       className="scene"
@@ -27,14 +32,34 @@ export default function TableScene({ entities, walls, isDm, selectedId, onSelect
         return renderer;
       }}
     >
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[6, 12, 4]} intensity={1.4} />
+      <ambientLight intensity={lit ? 0.22 : 0.6} />
+      <directionalLight position={[6, 12, 4]} intensity={lit ? 0.45 : 1.6} />
+      {lights.slice(0, MAX_POINT_LIGHTS).map((l) => (
+        <pointLight
+          key={l.id.toString()}
+          position={[l.x, 1.6, l.z]}
+          color={l.colorRgb}
+          intensity={Math.max(l.intensity, 0.4) * 8}
+          distance={l.range * 2.2}
+          decay={1.6}
+        />
+      ))}
       <Ground
         onGroundClick={(x, z) => {
           if (selectedId !== null) onMove(selectedId, x, z);
         }}
         onMiss={() => onSelect(null)}
       />
+      {mapImage && (
+        <Suspense fallback={null}>
+          <MapFloor
+            image={mapImage}
+            onGroundClick={(x, z) => {
+              if (selectedId !== null) onMove(selectedId, x, z);
+            }}
+          />
+        </Suspense>
+      )}
       {walls.map((w) => (
         <WallBox key={w.id.toString()} wall={w} />
       ))}
@@ -49,6 +74,24 @@ export default function TableScene({ entities, walls, isDm, selectedId, onSelect
       ))}
       <OrbitControls makeDefault maxPolarAngle={Math.PI / 2.1} />
     </Canvas>
+  );
+}
+
+function MapFloor({ image, onGroundClick }: { image: MapImage; onGroundClick: (x: number, z: number) => void }) {
+  const texture = useLoader(THREE.TextureLoader, image.url);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[image.offsetX, 0.02, image.offsetZ]}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (e.button === 0) onGroundClick(e.point.x, e.point.z);
+      }}
+    >
+      <planeGeometry args={[image.width, image.height]} />
+      <meshStandardMaterial map={texture} />
+    </mesh>
   );
 }
 

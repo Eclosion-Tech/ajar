@@ -44,6 +44,37 @@ export const GameTable = __t.object("GameTable", {
 });
 export type GameTable = __Infer<typeof GameTable>;
 
+export const Light = __t.object("Light", {
+  id: __t.u64(),
+  tableId: __t.u64(),
+  x: __t.f32(),
+  z: __t.f32(),
+  range: __t.f32(),
+  intensity: __t.f32(),
+  colorRgb: __t.u32(),
+});
+export type Light = __Infer<typeof Light>;
+
+export const LightInput = __t.object("LightInput", {
+  x: __t.f32(),
+  z: __t.f32(),
+  range: __t.f32(),
+  intensity: __t.f32(),
+  colorRgb: __t.u32(),
+});
+export type LightInput = __Infer<typeof LightInput>;
+
+export const MapImage = __t.object("MapImage", {
+  id: __t.u64(),
+  tableId: __t.u64(),
+  url: __t.string(),
+  width: __t.f32(),
+  height: __t.f32(),
+  offsetX: __t.f32(),
+  offsetZ: __t.f32(),
+});
+export type MapImage = __Infer<typeof MapImage>;
+
 export const MigrationState = __t.object("MigrationState", {
   stepKey: __t.string(),
   appliedAt: __t.timestamp(),

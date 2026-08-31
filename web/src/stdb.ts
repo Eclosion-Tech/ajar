@@ -1,5 +1,5 @@
 import { DbConnection } from './module_bindings';
-import type { Entity, GameTable, Participant, Wall } from './module_bindings/types';
+import type { Entity, GameTable, Light, MapImage, Participant, Wall } from './module_bindings/types';
 import type { Identity } from 'spacetimedb';
 
 export type Snapshot = {
@@ -10,6 +10,8 @@ export type Snapshot = {
   participants: Participant[];
   entities: Entity[];
   walls: Wall[];
+  lights: Light[];
+  mapImages: MapImage[];
 };
 
 type Listener = () => void;
@@ -25,6 +27,8 @@ class Store {
   private participants = new Map<string, Participant>();
   private entities = new Map<string, Entity>();
   private walls = new Map<string, Wall>();
+  private lights = new Map<string, Light>();
+  private mapImages = new Map<string, MapImage>();
   private snapshot: Snapshot = {
     connected: false,
     subscribed: false,
@@ -33,6 +37,8 @@ class Store {
     participants: [],
     entities: [],
     walls: [],
+    lights: [],
+    mapImages: [],
   };
 
   subscribe = (fn: Listener) => {
@@ -50,6 +56,8 @@ class Store {
       participants: [...this.participants.values()],
       entities: [...this.entities.values()],
       walls: [...this.walls.values()],
+      lights: [...this.lights.values()],
+      mapImages: [...this.mapImages.values()],
     };
     this.listeners.forEach((fn) => fn());
   }
@@ -73,6 +81,8 @@ class Store {
             'SELECT * FROM participant',
             'SELECT * FROM entity',
             'SELECT * FROM wall',
+            'SELECT * FROM light',
+            'SELECT * FROM map_image',
           ]);
         this.bump({ connected: true, identity });
       })
@@ -123,6 +133,26 @@ class Store {
     });
     conn.db.wall.onDelete((_ctx, row) => {
       this.walls.delete(row.id.toString());
+      this.bump();
+    });
+    conn.db.light.onInsert((_ctx, row) => {
+      this.lights.set(row.id.toString(), row);
+      this.bump();
+    });
+    conn.db.light.onDelete((_ctx, row) => {
+      this.lights.delete(row.id.toString());
+      this.bump();
+    });
+    conn.db.map_image.onInsert((_ctx, row) => {
+      this.mapImages.set(row.id.toString(), row);
+      this.bump();
+    });
+    conn.db.map_image.onUpdate((_ctx, _old, row) => {
+      this.mapImages.set(row.id.toString(), row);
+      this.bump();
+    });
+    conn.db.map_image.onDelete((_ctx, row) => {
+      this.mapImages.delete(row.id.toString());
       this.bump();
     });
   }

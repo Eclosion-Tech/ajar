@@ -22,6 +22,15 @@ pub struct WallInput {
     pub thickness: f32,
 }
 
+#[derive(SpacetimeType)]
+pub struct LightInput {
+    pub x: f32,
+    pub z: f32,
+    pub range: f32,
+    pub intensity: f32,
+    pub color_rgb: u32,
+}
+
 #[table(accessor = game_table, public)]
 pub struct GameTable {
     #[primary_key]
@@ -80,6 +89,34 @@ pub struct Wall {
     pub bz: f32,
     pub height: f32,
     pub thickness: f32,
+}
+
+#[table(accessor = light, public)]
+pub struct Light {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    #[index(btree)]
+    pub table_id: u64,
+    pub x: f32,
+    pub z: f32,
+    pub range: f32,
+    pub intensity: f32,
+    pub color_rgb: u32,
+}
+
+#[table(accessor = map_image, public)]
+pub struct MapImage {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    #[index(btree)]
+    pub table_id: u64,
+    pub url: String,
+    pub width: f32,
+    pub height: f32,
+    pub offset_x: f32,
+    pub offset_z: f32,
 }
 
 #[table(accessor = migration_state)]

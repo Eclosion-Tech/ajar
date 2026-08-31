@@ -2,7 +2,9 @@ import { useRef, useState } from 'react';
 import { reducers } from '../stdb';
 import { EntityKind } from '../module_bindings/types';
 import type { Entity } from '../module_bindings/types';
-import { isUvttError, parse, toWallSegments } from '../lib/uvtt';
+import { imageBlob, isUvttError, parse, toLights, toWallSegments } from '../lib/uvtt';
+
+const BLOBD_URI = (import.meta.env.VITE_BLOBD_URI as string | undefined) ?? 'http://localhost:8787';
 
 const MINI_COLORS = ['#4cc9f0', '#80ed99', '#ffd166', '#c77dff', '#f4a261'];
 
@@ -33,8 +35,42 @@ export default function Toolbar({
       // them all in objects_line_of_sight — fall back when the primary is empty.
       let walls = toWallSegments(map, {});
       if (walls.length === 0) walls = toWallSegments(map, { includeObjects: true });
+
+      // Center the map on the world origin so it lands under the camera.
+      const cx = map.resolution.mapSize.x / 2;
+      const cz = map.resolution.mapSize.z / 2;
+      walls = walls.map((w) => ({ ...w, ax: w.ax - cx, az: w.az - cz, bx: w.bx - cx, bz: w.bz - cz }));
+      const lights = toLights(map).map((l) => ({
+        x: l.x - cx,
+        z: l.z - cz,
+        range: l.range,
+        intensity: l.intensity,
+        colorRgb: l.colorHex,
+      }));
+
       await reducers().importWalls({ tableId, walls });
-      setImportNote(`imported ${walls.length} wall segments`);
+      await reducers().importLights({ tableId, lights });
+
+      let imageNote = '';
+      const img = imageBlob(map);
+      if (img) {
+        try {
+          const res = await fetch(`${BLOBD_URI}/blobs`, { method: 'PUT', body: new Blob([img.slice()]) });
+          if (!res.ok) throw new Error(`blobd ${res.status}`);
+          const { url } = (await res.json()) as { url: string };
+          await reducers().setMapImage({
+            tableId,
+            url,
+            width: map.resolution.mapSize.x,
+            height: map.resolution.mapSize.z,
+            offsetX: 0,
+            offsetZ: 0,
+          });
+        } catch {
+          imageNote = '; floor image skipped (is blobd running? pnpm blobd)';
+        }
+      }
+      setImportNote(`imported ${walls.length} walls, ${lights.length} lights${imageNote}`);
     } catch (e) {
       setImportNote(`import failed: ${e instanceof Error ? e.message : String(e)}`);
     }

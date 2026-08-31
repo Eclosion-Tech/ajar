@@ -204,6 +204,79 @@ pub fn clear_walls(ctx: &ReducerContext, table_id: u64) -> Result<(), String> {
     Ok(())
 }
 
+#[reducer]
+pub fn import_lights(
+    ctx: &ReducerContext,
+    table_id: u64,
+    lights: Vec<LightInput>,
+) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+    if lights.len() > 1024 {
+        return Err("cannot import more than 1024 lights".to_string());
+    }
+
+    delete_lights(ctx, table_id);
+    for light in lights {
+        ctx.db.light().insert(Light {
+            id: 0,
+            table_id,
+            x: light.x,
+            z: light.z,
+            range: light.range,
+            intensity: light.intensity,
+            color_rgb: light.color_rgb,
+        });
+    }
+    Ok(())
+}
+
+#[reducer]
+pub fn clear_lights(ctx: &ReducerContext, table_id: u64) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+    delete_lights(ctx, table_id);
+    Ok(())
+}
+
+#[reducer]
+pub fn set_map_image(
+    ctx: &ReducerContext,
+    table_id: u64,
+    url: String,
+    width: f32,
+    height: f32,
+    offset_x: f32,
+    offset_z: f32,
+) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+
+    if let Some(mut map_image) = ctx.db.map_image().table_id().filter(table_id).next() {
+        map_image.url = url;
+        map_image.width = width;
+        map_image.height = height;
+        map_image.offset_x = offset_x;
+        map_image.offset_z = offset_z;
+        ctx.db.map_image().id().update(map_image);
+    } else {
+        ctx.db.map_image().insert(MapImage {
+            id: 0,
+            table_id,
+            url,
+            width,
+            height,
+            offset_x,
+            offset_z,
+        });
+    }
+    Ok(())
+}
+
+#[reducer]
+pub fn clear_map_image(ctx: &ReducerContext, table_id: u64) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+    delete_map_images(ctx, table_id);
+    Ok(())
+}
+
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let participants: Vec<_> = ctx
@@ -241,6 +314,34 @@ fn delete_walls(ctx: &ReducerContext, table_id: u64) {
 
     for wall_id in wall_ids {
         ctx.db.wall().id().delete(wall_id);
+    }
+}
+
+fn delete_lights(ctx: &ReducerContext, table_id: u64) {
+    let light_ids: Vec<_> = ctx
+        .db
+        .light()
+        .table_id()
+        .filter(table_id)
+        .map(|light| light.id)
+        .collect();
+
+    for light_id in light_ids {
+        ctx.db.light().id().delete(light_id);
+    }
+}
+
+fn delete_map_images(ctx: &ReducerContext, table_id: u64) {
+    let map_image_ids: Vec<_> = ctx
+        .db
+        .map_image()
+        .table_id()
+        .filter(table_id)
+        .map(|map_image| map_image.id)
+        .collect();
+
+    for map_image_id in map_image_ids {
+        ctx.db.map_image().id().delete(map_image_id);
     }
 }
 
