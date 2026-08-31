@@ -1,0 +1,9 @@
+{
+  "name": "3dvtt-workspace",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build"
+  }
+}

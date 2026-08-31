@@ -1,0 +1,91 @@
+# Walking Skeleton — Module Contract
+
+The coordination contract between `server/spacetimedb` (Rust STDB module) and `web/`
+(client). Change this file first; code follows it.
+
+**Scope:** the validation-demo vertical slice. Two browser tabs, one table: create a
+table, join by slug, spawn minis, move them (synced live), DM hides/reveals a monster
+that players cannot see. Nothing else — no chat, dice, turn tracker, or UVTT import yet.
+
+Toolchain: `spacetimedb = "=2.0.3"` with `features = ["unstable"]` (row-level security),
+`crate-type = ["cdylib"]`. Mirrors the Pear module's conventions.
+
+## Tables (all `public`; RLS restricts `entity`)
+
+### `game_table`
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| slug | String | `#[unique]` — the join code in the URL |
+| name | String | |
+| dm_identity | Identity | creator; the DM |
+| created_at | Timestamp | |
+
+### `participant`
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| table_id | u64 | btree index |
+| identity | Identity | btree index; (table_id, identity) uniqueness enforced in reducers |
+| display_name | String | |
+| role | Role | enum `Dm \| Player` (SpacetimeType) |
+| online | bool | |
+
+### `entity`
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| table_id | u64 | btree index |
+| dm_identity | Identity | denormalized copy of the table's DM, for single-table RLS |
+| kind | EntityKind | enum `Mini \| Prop` (SpacetimeType) |
+| name | String | |
+| color | String | hex like `#c0ffee` |
+| x, y, z | f32 | position; y is up; grid plane is y=0 |
+| rot_y | f32 | radians |
+| hidden | bool | true ⇒ DM-only |
+| created_by | Identity | |
+
+## Row-level security (the product feature)
+
+Two union-ed filters on `entity`, Pear idiom:
+
+```rust
+#[client_visibility_filter]
+const ENTITY_VISIBLE: Filter = Filter::Sql("SELECT * FROM entity WHERE hidden = false");
+
+#[client_visibility_filter]
+const ENTITY_DM: Filter = Filter::Sql("SELECT * FROM entity WHERE dm_identity = :sender");
+```
+
+Players never receive hidden rows — hiding is server-side, not a client render flag.
+`game_table` and `participant` stay fully public for the skeleton.
+
+## Reducers (all return `Result<(), String>`)
+
+- `create_table(name: String, display_name: String)` — generate a 6-char lowercase
+  alphanumeric slug (from `ctx.rng()`; retry on collision), insert `game_table` with
+  sender as `dm_identity`, insert sender as online `Dm` participant.
+- `join_table(slug: String, display_name: String)` — look up table by slug (err if
+  missing). Upsert participant: role `Dm` if sender == `dm_identity`, else `Player`;
+  set `online = true`, update `display_name`.
+- `spawn_entity(table_id: u64, kind: EntityKind, name: String, color: String, x: f32, z: f32, hidden: bool)`
+  — sender must be the table's DM. y = 0, rot_y = 0. Copy `dm_identity` from the table.
+- `move_entity(entity_id: u64, x: f32, y: f32, z: f32, rot_y: f32)` — sender must be an
+  online participant of the entity's table; if the entity is hidden, DM only.
+- `set_entity_hidden(entity_id: u64, hidden: bool)` — DM of the entity's table only.
+- `delete_entity(entity_id: u64)` — DM only.
+- `client_disconnected` (lifecycle) — set `online = false` on all participant rows for
+  the sender identity.
+- `run_pending_migrations()` — cloud-compat convention from Pear: idempotent, consults a
+  private `migration_state` table (`step_key: String` pk, `applied_at: Timestamp`),
+  currently zero steps. Structure it so steps append as
+  `run_step(ctx, "some_backfill_v1", |ctx| { ... })`.
+
+## Client wiring (info for web/, not the module)
+
+- Connection: `@clockworklabs/spacetimedb-sdk`, module name `3dvtt` on local
+  `spacetime start` (default `http://localhost:3000`).
+- Bindings generated with
+  `spacetime generate --lang typescript --out-dir web/src/module_bindings --project-path server/spacetimedb`.
+- Client subscribes per table: `SELECT * FROM entity WHERE table_id = ...` etc. RLS
+  intersects with subscriptions server-side.

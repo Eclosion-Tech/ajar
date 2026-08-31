@@ -1,0 +1,15 @@
+# deps / builds
+node_modules/
+target/
+dist/
+.pnpm-store/
+
+# env & local
+.env
+.env.local
+*.local.json
+!spacetime.local.json.example
+
+# editor/os
+.DS_Store
+*.log
