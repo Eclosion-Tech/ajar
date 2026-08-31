@@ -59,6 +59,89 @@ function scaleUV(geometry: BufferGeometry, s: number, t: number): void {
   }
 }
 
+/** Shift UVs so each board samples a different stretch of the grain. */
+function offsetUV(geometry: BufferGeometry, du: number, dv: number): void {
+  const uv = geometry.getAttribute('uv');
+  for (let i = 0; i < uv.count; i += 1) {
+    uv.setXY(i, uv.getX(i) + du, uv.getY(i) + dv);
+  }
+}
+
+/** Split a span into seeded board widths (with a hair of gap between). */
+function boardWidths(rng: Rng, span: number): number[] {
+  const widths: number[] = [];
+  let used = 0;
+  while (used < span - 0.05) {
+    const w = Math.min(0.13 + rng() * 0.11, span - used);
+    widths.push(w);
+    used += w;
+  }
+  if (widths.length > 0) widths[widths.length - 1] += span - used;
+  return widths;
+}
+
+const BOARD_GAP = 0.007;
+
+/**
+ * A tabletop as actual carpentry: boards laid along the long axis, each with
+ * its own width, tone, grain offset, hair-height offset, and slightly
+ * staggered ends. Round tops clip board lengths to the circle's chords,
+ * giving a stepped rustic edge. A near-black underlayer catches gap
+ * sightlines so seams read as shadow.
+ */
+function buildPlankedTop(
+  shape: 'round' | 'rect',
+  width: number,
+  depth: number,
+  thickness: number,
+  height: number,
+  tone: number,
+  rng: Rng,
+  pieces: BufferGeometry[],
+): void {
+  const alongX = shape === 'round' || width >= depth;
+  const span = shape === 'round' ? width : alongX ? depth : width;
+  const radius = width / 2;
+  const y = height - thickness / 2;
+
+  const under =
+    shape === 'round'
+      ? new CylinderGeometry(radius * 0.98, radius * 0.98, thickness * 0.5, 9)
+      : new BoxGeometry((alongX ? width : depth) * 0.985, thickness * 0.5, span * 0.985);
+  if (shape !== 'round' && !alongX) under.applyMatrix4(new Matrix4().makeRotationY(Math.PI / 2));
+  under.applyMatrix4(new Matrix4().setPosition(0, y - thickness * 0.25, 0));
+  pieces.push(paint(under, shade(tone, 0.28)));
+
+  const widths = boardWidths(rng, span);
+  let cursor = -span / 2;
+  for (const bw of widths) {
+    const center = cursor + bw / 2;
+    cursor += bw;
+
+    let length: number;
+    if (shape === 'round') {
+      const reach = Math.max(0.05, radius * radius - center * center);
+      length = 2 * Math.sqrt(reach) * (0.98 + jitter(rng, 0.015));
+    } else {
+      length = (alongX ? width : depth) * (0.99 + jitter(rng, 0.01));
+    }
+
+    const board = new BoxGeometry(length, thickness, Math.max(0.04, bw - BOARD_GAP));
+    scaleUV(board, Math.max(1, length), 0.35);
+    offsetUV(board, rng() * 4, rng() * 4);
+    board.applyMatrix4(
+      new Matrix4()
+        .makeRotationY(alongX ? 0 : Math.PI / 2)
+        .setPosition(
+          alongX ? jitter(rng, 0.008) : center,
+          y + jitter(rng, 0.0035),
+          alongX ? center : jitter(rng, 0.008),
+        ),
+    );
+    pieces.push(paint(board, worn(rng, shade(tone, 1 + jitter(rng, 0.07)))));
+  }
+}
+
 /**
  * Subtle per-triangle brightness variation on non-indexed geometry — the
  * low-poly faceted patchwork read. Deterministic via the shared rng.
@@ -87,18 +170,8 @@ export function buildTable(params: TableParams, seed: number): BufferGeometry {
   const topThickness = 0.06;
   const pieces: BufferGeometry[] = [];
 
-  // Top — a 9-segment cylinder keeps the round top angular, not smooth.
-  const top =
-    shape === 'round'
-      ? new CylinderGeometry(width / 2, width / 2, topThickness, 9)
-      : new BoxGeometry(width, topThickness, depth);
-  scaleUV(top, Math.max(1, width), Math.max(1, shape === 'round' ? width : depth));
-  top.applyMatrix4(
-    new Matrix4()
-      .makeRotationY(shape === 'round' ? jitter(rng, Math.PI / 9) : 0)
-      .setPosition(0, height - topThickness / 2, 0),
-  );
-  pieces.push(paint(top, worn(rng, tone)));
+  // Top as actual carpentry — individual boards, not a veneer slab.
+  buildPlankedTop(shape, width, depth, topThickness, height, tone, rng, pieces);
 
   const underHeight = height - topThickness;
 
