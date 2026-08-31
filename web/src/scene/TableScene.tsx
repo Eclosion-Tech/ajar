@@ -19,15 +19,33 @@ type Props = {
 
 // Forward rendering pays for every light on every fragment: keep only the
 // strongest few as real point lights; the rest render as emissive glows.
-const POINT_LIGHT_BUDGET = 12;
+// Tunable while we calibrate: ?lights=24 raises the budget, ?tiled=1 tries
+// three's WebGPU tiled lighting (all lights real; falls back silently).
+const params = new URLSearchParams(window.location.search);
+const POINT_LIGHT_BUDGET = Number(params.get('lights') ?? 12);
+const TILED = params.get('tiled') === '1';
+
+// Greedy spatial spread: strongest first, but keep min spacing so one wall of
+// sconces doesn't eat the whole budget while the room center goes dark.
+function pickSpread(ranked: Light[], budget: number, minDist = 3.5): Light[] {
+  const picked: Light[] = [];
+  for (const l of ranked) {
+    if (picked.length >= budget) break;
+    if (picked.every((p) => Math.hypot(p.x - l.x, p.z - l.z) >= minDist)) picked.push(l);
+  }
+  for (const l of ranked) {
+    if (picked.length >= budget) break;
+    if (!picked.includes(l)) picked.push(l);
+  }
+  return picked;
+}
 
 export default function TableScene({ entities, walls, lights, mapImage, isDm, selectedId, onSelect, onMove }: Props) {
   const lit = lights.length > 0;
-  const rankedLights = useMemo(
-    () => [...lights].sort((a, b) => b.intensity * b.range - a.intensity * a.range),
-    [lights],
-  );
-  const realLights = rankedLights.slice(0, POINT_LIGHT_BUDGET);
+  const realLights = useMemo(() => {
+    const ranked = [...lights].sort((a, b) => b.intensity * b.range - a.intensity * a.range);
+    return TILED ? ranked : pickSpread(ranked, POINT_LIGHT_BUDGET);
+  }, [lights]);
   return (
     <Canvas
       className="scene"
@@ -36,12 +54,21 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
       // are converted automatically, so no GLSL ShaderMaterials in this tree.
       gl={async (glProps) => {
         const renderer = new WebGPURenderer({ ...(glProps as object), antialias: true } as never);
+        if (TILED) {
+          try {
+            const { TiledLighting } = await import('three/addons/lighting/TiledLighting.js');
+            (renderer as unknown as { lighting: unknown }).lighting = new TiledLighting();
+          } catch (e) {
+            console.warn('tiled lighting unavailable, using forward path', e);
+          }
+        }
         await renderer.init();
         return renderer;
       }}
     >
-      <ambientLight intensity={lit ? 0.22 : 0.6} />
-      <directionalLight position={[6, 12, 4]} intensity={lit ? 0.45 : 1.6} />
+      <ambientLight intensity={lit ? 0.32 : 0.6} />
+      <hemisphereLight args={['#35405c', '#3d2c1c', lit ? 0.5 : 0.3]} />
+      <directionalLight position={[6, 12, 4]} intensity={lit ? 0.7 : 1.6} />
       {realLights.map((l) => (
         <pointLight
           key={l.id.toString()}
@@ -54,11 +81,11 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
       ))}
       {lights.map((l) => (
         <mesh key={`glow-${l.id.toString()}`} position={[l.x, 1.1, l.z]}>
-          <sphereGeometry args={[0.1, 8, 8]} />
+          <sphereGeometry args={[0.06, 8, 8]} />
           <meshBasicMaterial
             color={l.colorRgb}
             transparent
-            opacity={0.85}
+            opacity={0.55}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
           />
