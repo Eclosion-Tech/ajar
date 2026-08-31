@@ -3,7 +3,50 @@ import { reducers } from '../stdb';
 import { EntityKind } from '../module_bindings/types';
 import type { Entity, Prop } from '../module_bindings/types';
 import { imageBlob, isUvttError, parse, toLights, toWallSegments } from '../lib/uvtt';
-import { normalizeTableParams, WOOD_TONES, type TableParams } from '../lib/props';
+import { WOOD_TONES, type TableParams } from '../lib/props';
+
+// Per-kind param panel schemas. Generators normalize/clamp server-agnostically,
+// so the panel only needs sensible ranges, not validation.
+const PROP_PANELS: Record<
+  string,
+  {
+    cycle?: { key: string; values: readonly string[] };
+    sliders: { key: string; label: string; min: number; max: number }[];
+  }
+> = {
+  table: {
+    cycle: { key: 'shape', values: ['rect', 'round'] },
+    sliders: [
+      { key: 'width', label: 'w', min: 0.5, max: 4 },
+      { key: 'depth', label: 'd', min: 0.5, max: 4 },
+      { key: 'height', label: 'h', min: 0.5, max: 1.1 },
+    ],
+  },
+  seat: {
+    cycle: { key: 'style', values: ['stool', 'chair', 'bench'] },
+    sliders: [{ key: 'width', label: 'w', min: 0.35, max: 3 }],
+  },
+  barrel: {
+    sliders: [
+      { key: 'radius', label: 'r', min: 0.15, max: 0.5 },
+      { key: 'height', label: 'h', min: 0.4, max: 1.1 },
+    ],
+  },
+  crate: {
+    sliders: [
+      { key: 'width', label: 'w', min: 0.3, max: 1.5 },
+      { key: 'depth', label: 'd', min: 0.3, max: 1.5 },
+      { key: 'height', label: 'h', min: 0.3, max: 1.5 },
+    ],
+  },
+  chest: {
+    sliders: [
+      { key: 'width', label: 'w', min: 0.4, max: 1.4 },
+      { key: 'depth', label: 'd', min: 0.25, max: 1 },
+      { key: 'height', label: 'h', min: 0.25, max: 1 },
+    ],
+  },
+};
 
 const randomSeed = () => BigInt(Math.floor(Math.random() * 0xffffffff));
 
@@ -216,8 +259,9 @@ export default function Toolbar({
 }
 
 function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint; onDeselect: () => void }) {
-  const params = normalizeTableParams(safeParse(prop.params));
-  const throttle = useRef<{ timer: ReturnType<typeof setTimeout> | null; next: TableParams | null }>({
+  const params = safeParse(prop.params) as Record<string, unknown>;
+  const schema = PROP_PANELS[prop.kind] ?? { sliders: [] };
+  const throttle = useRef<{ timer: ReturnType<typeof setTimeout> | null; next: Record<string, unknown> | null }>({
     timer: null,
     next: null,
   });
@@ -230,9 +274,9 @@ function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint;
 
   // Live-edit sync: send at most every 120ms (trailing) so slider drags stream
   // as a handful of row updates, not hundreds.
-  function send(next: TableParams) {
+  function send(patch: Record<string, unknown>) {
     const t = throttle.current;
-    t.next = next;
+    t.next = { ...params, ...t.next, ...patch };
     if (t.timer) return;
     t.timer = setTimeout(() => {
       t.timer = null;
@@ -241,47 +285,57 @@ function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint;
     }, 120);
   }
 
+  const num = (key: string, fallback: number) => {
+    const v = params[key];
+    return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+  };
+
   return (
     <>
       <span className="sep" />
       <span className="selected-name">{prop.kind}</span>
-      <button onClick={() => send({ ...params, shape: params.shape === 'round' ? 'rect' : 'round' })}>
-        {params.shape}
-      </button>
-      <label className="slider">
-        w
-        <input
-          type="range"
-          min={0.5}
-          max={4}
-          step={0.05}
-          value={params.width}
-          onChange={(e) => send({ ...params, width: Number(e.target.value) })}
-        />
-      </label>
-      {params.shape === 'rect' && (
-        <label className="slider">
-          d
+      {schema.cycle && (
+        <button
+          onClick={() => {
+            const values = schema.cycle!.values;
+            const current = String(params[schema.cycle!.key] ?? values[0]);
+            const next = values[(values.indexOf(current) + 1) % values.length];
+            send({ [schema.cycle!.key]: next });
+          }}
+        >
+          {String(params[schema.cycle.key] ?? schema.cycle.values[0])}
+        </button>
+      )}
+      {schema.sliders.map((s) => (
+        <label key={s.key} className="slider">
+          {s.label}
           <input
             type="range"
-            min={0.5}
-            max={4}
+            min={s.min}
+            max={s.max}
             step={0.05}
-            value={params.depth}
-            onChange={(e) => send({ ...params, depth: Number(e.target.value) })}
+            value={num(s.key, (s.min + s.max) / 2)}
+            onChange={(e) => send({ [s.key]: Number(e.target.value) })}
           />
         </label>
-      )}
+      ))}
       <span className="swatches">
         {WOOD_TONES.map((tone, i) => (
           <button
             key={tone}
-            className={`swatch ${params.wood === i ? 'swatch-active' : ''}`}
+            className={`swatch ${num('wood', 0) === i ? 'swatch-active' : ''}`}
             style={{ background: `#${tone.toString(16).padStart(6, '0')}` }}
-            onClick={() => send({ ...params, wood: i })}
+            onClick={() => send({ wood: i })}
           />
         ))}
       </span>
+      <button
+        onClick={() =>
+          reducers().moveProp({ propId: prop.id, x: prop.x, z: prop.z, rotY: prop.rotY + Math.PI / 4 })
+        }
+      >
+        rotate
+      </button>
       <button
         onClick={() => {
           // Reroll the jitter: respawn in place with a fresh seed.
