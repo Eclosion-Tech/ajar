@@ -76,18 +76,6 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
           decay={1.6}
         />
       ))}
-      {lights.map((l) => (
-        <mesh key={`glow-${l.id.toString()}`} position={[l.x, 1.1, l.z]}>
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshBasicMaterial
-            color={l.colorRgb}
-            transparent
-            opacity={0.55}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-      ))}
       <Ground
         onGroundClick={(x, z) => {
           if (selectedId !== null) onMove(selectedId, x, z);
