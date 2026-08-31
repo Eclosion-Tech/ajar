@@ -19,10 +19,8 @@ type Props = {
 
 // Forward rendering pays for every light on every fragment: keep only the
 // strongest few as real point lights; the rest render as emissive glows.
-// Tunable while we calibrate: ?lights=24 raises the budget, ?tiled=1 tries
-// three's WebGPU tiled lighting (all lights real; falls back silently).
-// Params are accepted before the # or appended after the hash route; a change
-// needs one refresh since the renderer initializes once.
+// ?lights=N (before the # or after the hash route) overrides the budget while
+// we calibrate; a change needs one refresh.
 const params = new URLSearchParams(window.location.search);
 const hashQuery = window.location.hash.split('?')[1];
 if (hashQuery) {
@@ -31,7 +29,6 @@ if (hashQuery) {
   }
 }
 const POINT_LIGHT_BUDGET = Number(params.get('lights') ?? 12);
-const TILED = params.get('tiled') === '1';
 
 // Greedy spatial spread: strongest first, but keep min spacing so one wall of
 // sconces doesn't eat the whole budget while the room center goes dark.
@@ -52,7 +49,7 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
   const lit = lights.length > 0;
   const realLights = useMemo(() => {
     const ranked = [...lights].sort((a, b) => b.intensity * b.range - a.intensity * a.range);
-    return TILED ? ranked : pickSpread(ranked, POINT_LIGHT_BUDGET);
+    return pickSpread(ranked, POINT_LIGHT_BUDGET);
   }, [lights]);
   return (
     <Canvas
@@ -62,14 +59,6 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
       // are converted automatically, so no GLSL ShaderMaterials in this tree.
       gl={async (glProps) => {
         const renderer = new WebGPURenderer({ ...(glProps as object), antialias: true } as never);
-        if (TILED) {
-          try {
-            const { TiledLighting } = await import('three/addons/lighting/TiledLighting.js');
-            (renderer as unknown as { lighting: unknown }).lighting = new TiledLighting();
-          } catch (e) {
-            console.warn('tiled lighting unavailable, using forward path', e);
-          }
-        }
         await renderer.init();
         return renderer;
       }}
