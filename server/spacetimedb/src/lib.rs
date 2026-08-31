@@ -2,7 +2,7 @@ mod migrations;
 mod reducers;
 mod tables;
 
-pub use tables::{EntityKind, Role};
+pub use tables::{EntityKind, Role, WallInput};
 
 use spacetimedb::{client_visibility_filter, Filter};
 

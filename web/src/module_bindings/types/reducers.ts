@@ -6,16 +6,20 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import ClearWallsReducer from "../clear_walls_reducer";
 import CreateTableReducer from "../create_table_reducer";
 import DeleteEntityReducer from "../delete_entity_reducer";
+import ImportWallsReducer from "../import_walls_reducer";
 import JoinTableReducer from "../join_table_reducer";
 import MoveEntityReducer from "../move_entity_reducer";
 import RunPendingMigrationsReducer from "../run_pending_migrations_reducer";
 import SetEntityHiddenReducer from "../set_entity_hidden_reducer";
 import SpawnEntityReducer from "../spawn_entity_reducer";
 
+export type ClearWallsParams = __Infer<typeof ClearWallsReducer>;
 export type CreateTableParams = __Infer<typeof CreateTableReducer>;
 export type DeleteEntityParams = __Infer<typeof DeleteEntityReducer>;
+export type ImportWallsParams = __Infer<typeof ImportWallsReducer>;
 export type JoinTableParams = __Infer<typeof JoinTableReducer>;
 export type MoveEntityParams = __Infer<typeof MoveEntityReducer>;
 export type RunPendingMigrationsParams = __Infer<typeof RunPendingMigrationsReducer>;

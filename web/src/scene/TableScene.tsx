@@ -3,17 +3,18 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import type { Entity } from '../module_bindings/types';
+import type { Entity, Wall } from '../module_bindings/types';
 
 type Props = {
   entities: Entity[];
+  walls: Wall[];
   isDm: boolean;
   selectedId: bigint | null;
   onSelect: (id: bigint | null) => void;
   onMove: (id: bigint, x: number, z: number) => void;
 };
 
-export default function TableScene({ entities, isDm, selectedId, onSelect, onMove }: Props) {
+export default function TableScene({ entities, walls, isDm, selectedId, onSelect, onMove }: Props) {
   return (
     <Canvas
       className="scene"
@@ -34,6 +35,9 @@ export default function TableScene({ entities, isDm, selectedId, onSelect, onMov
         }}
         onMiss={() => onSelect(null)}
       />
+      {walls.map((w) => (
+        <WallBox key={w.id.toString()} wall={w} />
+      ))}
       {entities.map((e) => (
         <Mini
           key={e.id.toString()}
@@ -45,6 +49,22 @@ export default function TableScene({ entities, isDm, selectedId, onSelect, onMov
       ))}
       <OrbitControls makeDefault maxPolarAngle={Math.PI / 2.1} />
     </Canvas>
+  );
+}
+
+function WallBox({ wall }: { wall: Wall }) {
+  const dx = wall.bx - wall.ax;
+  const dz = wall.bz - wall.az;
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-4) return null;
+  return (
+    <mesh
+      position={[(wall.ax + wall.bx) / 2, wall.height / 2, (wall.az + wall.bz) / 2]}
+      rotation={[0, -Math.atan2(dz, dx), 0]}
+    >
+      <boxGeometry args={[len, wall.height, wall.thickness]} />
+      <meshStandardMaterial color="#5c6b84" />
+    </mesh>
   );
 }
 

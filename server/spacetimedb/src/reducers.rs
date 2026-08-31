@@ -170,6 +170,40 @@ pub fn delete_entity(ctx: &ReducerContext, entity_id: u64) -> Result<(), String>
     Ok(())
 }
 
+#[reducer]
+pub fn import_walls(
+    ctx: &ReducerContext,
+    table_id: u64,
+    walls: Vec<WallInput>,
+) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+    if walls.len() > 4096 {
+        return Err("cannot import more than 4096 walls".to_string());
+    }
+
+    delete_walls(ctx, table_id);
+    for wall in walls {
+        ctx.db.wall().insert(Wall {
+            id: 0,
+            table_id,
+            ax: wall.ax,
+            az: wall.az,
+            bx: wall.bx,
+            bz: wall.bz,
+            height: wall.height,
+            thickness: wall.thickness,
+        });
+    }
+    Ok(())
+}
+
+#[reducer]
+pub fn clear_walls(ctx: &ReducerContext, table_id: u64) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+    delete_walls(ctx, table_id);
+    Ok(())
+}
+
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let participants: Vec<_> = ctx
@@ -194,6 +228,20 @@ fn find_entity(ctx: &ReducerContext, entity_id: u64) -> Result<Entity, String> {
         .id()
         .find(entity_id)
         .ok_or_else(|| "entity not found".to_string())
+}
+
+fn delete_walls(ctx: &ReducerContext, table_id: u64) {
+    let wall_ids: Vec<_> = ctx
+        .db
+        .wall()
+        .table_id()
+        .filter(table_id)
+        .map(|wall| wall.id)
+        .collect();
+
+    for wall_id in wall_ids {
+        ctx.db.wall().id().delete(wall_id);
+    }
 }
 
 fn require_table_dm(ctx: &ReducerContext, table_id: u64) -> Result<GameTable, String> {

@@ -1,6 +1,8 @@
+import { useRef, useState } from 'react';
 import { reducers } from '../stdb';
 import { EntityKind } from '../module_bindings/types';
 import type { Entity } from '../module_bindings/types';
+import { isUvttError, parse, toWallSegments } from '../lib/uvtt';
 
 const MINI_COLORS = ['#4cc9f0', '#80ed99', '#ffd166', '#c77dff', '#f4a261'];
 
@@ -17,8 +19,41 @@ export default function Toolbar({
   selected: Entity | null;
   onDeselect: () => void;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
+  async function importFile(file: File) {
+    try {
+      const map = parse(JSON.parse(await file.text()));
+      if (isUvttError(map)) {
+        setImportNote(`import failed: ${map.message}`);
+        return;
+      }
+      const walls = toWallSegments(map, {});
+      await reducers().importWalls({ tableId, walls });
+      setImportNote(`imported ${walls.length} wall segments`);
+    } catch (e) {
+      setImportNote(`import failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   return (
     <div className="hud hud-bottom">
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".dd2vtt,.uvtt,.df2vtt,application/json"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void importFile(file);
+        }}
+      />
+      <button onClick={() => fileRef.current?.click()}>import map</button>
+      <button onClick={() => reducers().clearWalls({ tableId })}>clear walls</button>
+      {importNote && <span className="role-note">{importNote}</span>}
+      <span className="sep" />
       <button
         onClick={() => {
           const { x, z } = spawnSpot();

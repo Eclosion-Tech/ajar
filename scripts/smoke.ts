@@ -35,6 +35,7 @@ function connect(label: string): Promise<Client> {
             'SELECT * FROM game_table',
             'SELECT * FROM participant',
             'SELECT * FROM entity',
+            'SELECT * FROM wall',
           ]);
       })
       .onConnectError((_ctx, err) => {
@@ -132,6 +133,34 @@ await waitFor('reveal reaches player', () => {
   return [...player.conn.db.entity.iter()].find((e) => e.id === monster.id);
 });
 check('reveal pushes row into player replica', true);
+
+// Walls: DM imports (replace-all), everyone sees them; players cannot import.
+const segs = [
+  { ax: 0, az: 0, bx: 4, bz: 0, height: 2.5, thickness: 0.15 },
+  { ax: 4, az: 0, bx: 4, bz: 4, height: 2.5, thickness: 0.15 },
+  { ax: 0, az: 0, bx: 0, bz: 4, height: 2.5, thickness: 0.15 },
+];
+dm.conn.reducers.importWalls({ tableId: table.id, walls: segs });
+await waitFor('player sees imported walls', () => {
+  const rows = [...player.conn.db.wall.iter()].filter((w) => w.tableId === table.id);
+  return rows.length === 3 ? rows : undefined;
+});
+check('wall import syncs to player replica', true);
+
+dm.conn.reducers.importWalls({ tableId: table.id, walls: segs.slice(0, 2) });
+await waitFor('replace-all shrinks wall set', () => {
+  const rows = [...player.conn.db.wall.iter()].filter((w) => w.tableId === table.id);
+  return rows.length === 2 ? rows : undefined;
+});
+check('import replaces previous walls', true);
+
+let wallRejected = false;
+try {
+  await player.conn.reducers.clearWalls({ tableId: table.id });
+} catch (e) {
+  wallRejected = String(e).includes('only the DM');
+}
+check('player cannot clear walls', wallRejected);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -59,12 +59,14 @@ export default function App() {
   }
 
   const tableEntities = snap.entities.filter((e) => e.tableId === table.id);
+  const tableWalls = snap.walls.filter((w) => w.tableId === table.id);
   const tableParticipants = snap.participants.filter((p) => p.tableId === table.id && p.online);
 
   return (
     <div className="table-view">
       <TableScene
         entities={tableEntities}
+        walls={tableWalls}
         isDm={isDm}
         selectedId={selectedId}
         onSelect={setSelectedId}

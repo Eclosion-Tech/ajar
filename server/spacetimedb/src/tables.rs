@@ -12,6 +12,16 @@ pub enum EntityKind {
     Prop,
 }
 
+#[derive(SpacetimeType)]
+pub struct WallInput {
+    pub ax: f32,
+    pub az: f32,
+    pub bx: f32,
+    pub bz: f32,
+    pub height: f32,
+    pub thickness: f32,
+}
+
 #[table(accessor = game_table, public)]
 pub struct GameTable {
     #[primary_key]
@@ -55,6 +65,21 @@ pub struct Entity {
     pub rot_y: f32,
     pub hidden: bool,
     pub created_by: Identity,
+}
+
+#[table(accessor = wall, public)]
+pub struct Wall {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    #[index(btree)]
+    pub table_id: u64,
+    pub ax: f32,
+    pub az: f32,
+    pub bx: f32,
+    pub bz: f32,
+    pub height: f32,
+    pub thickness: f32,
 }
 
 #[table(accessor = migration_state)]

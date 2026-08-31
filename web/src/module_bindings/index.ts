@@ -34,8 +34,10 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import ClearWallsReducer from "./clear_walls_reducer";
 import CreateTableReducer from "./create_table_reducer";
 import DeleteEntityReducer from "./delete_entity_reducer";
+import ImportWallsReducer from "./import_walls_reducer";
 import JoinTableReducer from "./join_table_reducer";
 import MoveEntityReducer from "./move_entity_reducer";
 import RunPendingMigrationsReducer from "./run_pending_migrations_reducer";
@@ -48,6 +50,7 @@ import SpawnEntityReducer from "./spawn_entity_reducer";
 import EntityRow from "./entity_table";
 import GameTableRow from "./game_table_table";
 import ParticipantRow from "./participant_table";
+import WallRow from "./wall_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -99,12 +102,28 @@ const tablesSchema = __schema({
       { name: 'participant_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ParticipantRow),
+  wall: __table({
+    name: 'wall',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { name: 'table_id', algorithm: 'btree', columns: [
+        'tableId',
+      ] },
+    ],
+    constraints: [
+      { name: 'wall_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, WallRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("clear_walls", ClearWallsReducer),
   __reducerSchema("create_table", CreateTableReducer),
   __reducerSchema("delete_entity", DeleteEntityReducer),
+  __reducerSchema("import_walls", ImportWallsReducer),
   __reducerSchema("join_table", JoinTableReducer),
   __reducerSchema("move_entity", MoveEntityReducer),
   __reducerSchema("run_pending_migrations", RunPendingMigrationsReducer),

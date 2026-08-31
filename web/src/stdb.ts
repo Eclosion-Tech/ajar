@@ -1,5 +1,5 @@
 import { DbConnection } from './module_bindings';
-import type { Entity, GameTable, Participant } from './module_bindings/types';
+import type { Entity, GameTable, Participant, Wall } from './module_bindings/types';
 import type { Identity } from 'spacetimedb';
 
 export type Snapshot = {
@@ -9,6 +9,7 @@ export type Snapshot = {
   tables: GameTable[];
   participants: Participant[];
   entities: Entity[];
+  walls: Wall[];
 };
 
 type Listener = () => void;
@@ -23,6 +24,7 @@ class Store {
   private tables = new Map<string, GameTable>();
   private participants = new Map<string, Participant>();
   private entities = new Map<string, Entity>();
+  private walls = new Map<string, Wall>();
   private snapshot: Snapshot = {
     connected: false,
     subscribed: false,
@@ -30,6 +32,7 @@ class Store {
     tables: [],
     participants: [],
     entities: [],
+    walls: [],
   };
 
   subscribe = (fn: Listener) => {
@@ -46,6 +49,7 @@ class Store {
       tables: [...this.tables.values()],
       participants: [...this.participants.values()],
       entities: [...this.entities.values()],
+      walls: [...this.walls.values()],
     };
     this.listeners.forEach((fn) => fn());
   }
@@ -68,6 +72,7 @@ class Store {
             'SELECT * FROM game_table',
             'SELECT * FROM participant',
             'SELECT * FROM entity',
+            'SELECT * FROM wall',
           ]);
         this.bump({ connected: true, identity });
       })
@@ -110,6 +115,14 @@ class Store {
     });
     conn.db.entity.onDelete((_ctx, row) => {
       this.entities.delete(row.id.toString());
+      this.bump();
+    });
+    conn.db.wall.onInsert((_ctx, row) => {
+      this.walls.set(row.id.toString(), row);
+      this.bump();
+    });
+    conn.db.wall.onDelete((_ctx, row) => {
+      this.walls.delete(row.id.toString());
       this.bump();
     });
   }

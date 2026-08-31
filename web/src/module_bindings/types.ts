@@ -69,3 +69,25 @@ export const Role = __t.enum("Role", {
 });
 export type Role = __Infer<typeof Role>;
 
+export const Wall = __t.object("Wall", {
+  id: __t.u64(),
+  tableId: __t.u64(),
+  ax: __t.f32(),
+  az: __t.f32(),
+  bx: __t.f32(),
+  bz: __t.f32(),
+  height: __t.f32(),
+  thickness: __t.f32(),
+});
+export type Wall = __Infer<typeof Wall>;
+
+export const WallInput = __t.object("WallInput", {
+  ax: __t.f32(),
+  az: __t.f32(),
+  bx: __t.f32(),
+  bz: __t.f32(),
+  height: __t.f32(),
+  thickness: __t.f32(),
+});
+export type WallInput = __Infer<typeof WallInput>;
+
