@@ -114,7 +114,9 @@ await waitFor('move synced to DM', () => {
 check('player move syncs to DM replica', true);
 
 // Player must NOT be able to reveal the monster (DM-only reducer).
-const monster = [...dm.conn.db.entity.iter()].find((e) => e.name === 'monster')!;
+const monster = [...dm.conn.db.entity.iter()].find(
+  (e) => e.tableId === table.id && e.name === 'monster',
+)!;
 let rejected = false;
 try {
   await player.conn.reducers.setEntityHidden({ entityId: monster.id, hidden: false });
