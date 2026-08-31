@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { wallSegmentsToGeometry } from '../lib/uvtt/geometry';
 import { buildProp } from '../lib/props';
+import { woodGrainTexture } from './grain';
 import { isSelected, type Selection } from '../selection';
 import type { Entity, Light, MapImage, Prop, Wall } from '../module_bindings/types';
 
@@ -144,7 +145,15 @@ function ProcProp({
           onClick();
         }}
       >
-        <meshStandardMaterial vertexColors flatShading transparent={dmGhost} opacity={dmGhost ? 0.45 : 1} />
+        <meshStandardMaterial
+          vertexColors
+          flatShading
+          map={woodGrainTexture()}
+          roughness={0.92}
+          metalness={0}
+          transparent={dmGhost}
+          opacity={dmGhost ? 0.45 : 1}
+        />
       </mesh>
       {selected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>

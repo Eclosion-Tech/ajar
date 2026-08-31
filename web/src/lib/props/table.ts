@@ -51,6 +51,34 @@ function paint(geometry: BufferGeometry, hex: number): BufferGeometry {
 /** Per-piece tone wobble so the wood doesn't read as machine-uniform. */
 const worn = (rng: Rng, hex: number) => shade(hex, 1 + jitter(rng, 0.05));
 
+/** Scale UVs so the tiling grain texture keeps uniform density across pieces. */
+function scaleUV(geometry: BufferGeometry, s: number, t: number): void {
+  const uv = geometry.getAttribute('uv');
+  for (let i = 0; i < uv.count; i += 1) {
+    uv.setXY(i, uv.getX(i) * s, uv.getY(i) * t);
+  }
+}
+
+/**
+ * Subtle per-triangle brightness variation on non-indexed geometry — the
+ * low-poly faceted patchwork read. Deterministic via the shared rng.
+ */
+function facetJitter(geometry: BufferGeometry, rng: Rng, amount: number): void {
+  const color = geometry.getAttribute('color');
+  for (let tri = 0; tri < color.count / 3; tri += 1) {
+    const f = 1 + jitter(rng, amount);
+    for (let v = 0; v < 3; v += 1) {
+      const i = tri * 3 + v;
+      color.setXYZ(
+        i,
+        Math.min(1, color.getX(i) * f),
+        Math.min(1, color.getY(i) * f),
+        Math.min(1, color.getZ(i) * f),
+      );
+    }
+  }
+}
+
 export function buildTable(params: TableParams, seed: number): BufferGeometry {
   const rng = mulberry32(seed);
   const { shape, width, depth, height, wood } = params;
@@ -64,6 +92,7 @@ export function buildTable(params: TableParams, seed: number): BufferGeometry {
     shape === 'round'
       ? new CylinderGeometry(width / 2, width / 2, topThickness, 9)
       : new BoxGeometry(width, topThickness, depth);
+  scaleUV(top, Math.max(1, width), Math.max(1, shape === 'round' ? width : depth));
   top.applyMatrix4(
     new Matrix4()
       .makeRotationY(shape === 'round' ? jitter(rng, Math.PI / 9) : 0)
@@ -109,7 +138,12 @@ export function buildTable(params: TableParams, seed: number): BufferGeometry {
     }
   }
 
-  const merged = mergeGeometries(pieces, false) ?? new BufferGeometry();
+  const indexed = mergeGeometries(pieces, false) ?? new BufferGeometry();
   for (const piece of pieces) piece.dispose();
+  // Non-indexed: flat shading wants split vertices anyway, per-triangle facet
+  // jitter needs them, and it removes the index buffer from the GPU path.
+  const merged = indexed.index ? indexed.toNonIndexed() : indexed;
+  if (merged !== indexed) indexed.dispose();
+  facetJitter(merged, rng, 0.045);
   return merged;
 }
