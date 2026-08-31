@@ -40,13 +40,19 @@ function finishStave(
   return paint(geometry, worn(rng, tone));
 }
 
+type StaveSurface = {
+  count: number;
+  /** Outer surface radius of the stave ring at height y — hoops conform to this. */
+  radiusAt: (y: number) => number;
+};
+
 function addStaves(
   radius: number,
   height: number,
   tone: number,
   rng: Rng,
   pieces: BufferGeometry[],
-): number {
+): StaveSurface {
   const count = Math.max(10, Math.round(radius * 34));
   const endRadius = radius * 0.91;
   const middleRadius = radius * 1.015;
@@ -75,7 +81,13 @@ function addStaves(
       pieces.push(finishStave(stave, rng, staveTone, segmentLength));
     }
   }
-  return count;
+  return {
+    count,
+    radiusAt: (y: number) => {
+      const f = Math.max(0, 1 - Math.abs(y - rise) / rise);
+      return endRadius + (middleRadius - endRadius) * f + staveDepth / 2;
+    },
+  };
 }
 
 function addLid(
@@ -114,22 +126,27 @@ export function buildBarrel(params: BarrelParams, seed: number): BufferGeometry 
   const pieces: BufferGeometry[] = [];
   const lidThickness = 0.035;
   const bodyHeight = height - lidThickness;
-  const staveCount = addStaves(radius, bodyHeight, tone, rng, pieces);
+  const staves = addStaves(radius, bodyHeight, tone, rng, pieces);
 
   const hoopCount = height > 0.62 ? 3 : 2;
   const hoopTone = shade(0x55544e, 0.38);
   const hoopHeight = Math.min(0.038, height * 0.055);
   for (let i = 0; i < hoopCount; i += 1) {
     const fraction = hoopCount === 2 ? 0.2 + i * 0.6 : 0.16 + i * 0.34;
-    const fromMiddle = Math.abs(fraction - 0.5) * 2;
-    // Proud of the staves' corner radius everywhere: the hoop N-gon's flat
-    // faces (inradius = R·cos(π/N)) must clear the staves' outer corners plus
-    // the mid-barrel bulge, or staves punch through as black notches.
-    const hoopRadius = radius * (1.2 - fromMiddle * 0.1);
-    const hoop = new CylinderGeometry(hoopRadius, hoopRadius, hoopHeight, staveCount, 1, true);
+    const y = bodyHeight * fraction;
+    // Conform to the stave surface at this height: the hoop N-gon's flat
+    // faces (inradius = R·cos(π/N)) sit a hair proud of the stave faces, and
+    // rotating by π/N aligns hoop facets with stave facets so the band hugs
+    // uniformly instead of clipping or floating. Solid cylinder — the caps
+    // close the sliver between band and wood at the silhouette.
+    const inradius = staves.radiusAt(y) + 0.005;
+    const hoopRadius = inradius / Math.cos(Math.PI / staves.count);
+    const hoop = new CylinderGeometry(hoopRadius, hoopRadius, hoopHeight, staves.count);
     offsetUV(hoop, rng() * 2, rng() * 2);
     hoop.applyMatrix4(
-      new Matrix4().setPosition(0, bodyHeight * fraction + jitter(rng, 0.002), 0),
+      new Matrix4()
+        .makeRotationY(Math.PI / staves.count)
+        .setPosition(0, y + jitter(rng, 0.002), 0),
     );
     pieces.push(paint(hoop, shade(hoopTone, 1 + jitter(rng, 0.06))));
   }
