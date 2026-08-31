@@ -13,3 +13,4 @@ dist/
 # editor/os
 .DS_Store
 *.log
+samples/

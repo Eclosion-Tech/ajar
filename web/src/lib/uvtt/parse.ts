@@ -63,6 +63,14 @@ export interface UvttError {
 export interface WallSegmentOptions {
   readonly height?: number;
   readonly thickness?: number;
+  /**
+   * Also extrude `objects_line_of_sight` polylines. Dungeondraft puts walls in
+   * `line_of_sight` and furniture in `objects_line_of_sight`, but some tools
+   * (Arkenforge) emit all structural walls as objects with an empty
+   * `line_of_sight` — callers should fall back to this when the primary set
+   * comes out empty.
+   */
+  readonly includeObjects?: boolean;
 }
 
 export interface WallSegment {
@@ -454,8 +462,11 @@ export function toWallSegments(map: UvttMap, opts: WallSegmentOptions = {}): Wal
   const height = opts.height ?? DEFAULT_WALL_HEIGHT;
   const thickness = opts.thickness ?? DEFAULT_WALL_THICKNESS;
   const segments: WallSegment[] = [];
+  const polylines = opts.includeObjects
+    ? [...map.lineOfSight, ...map.objectsLineOfSight]
+    : map.lineOfSight;
 
-  for (const polyline of map.lineOfSight) {
+  for (const polyline of polylines) {
     for (let index = 1; index < polyline.length; index += 1) {
       const start = polyline[index - 1];
       const end = polyline[index];

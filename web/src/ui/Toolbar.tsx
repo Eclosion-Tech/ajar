@@ -29,7 +29,10 @@ export default function Toolbar({
         setImportNote(`import failed: ${map.message}`);
         return;
       }
-      const walls = toWallSegments(map, {});
+      // Dungeondraft puts walls in line_of_sight; Arkenforge-style exports put
+      // them all in objects_line_of_sight — fall back when the primary is empty.
+      let walls = toWallSegments(map, {});
+      if (walls.length === 0) walls = toWallSegments(map, { includeObjects: true });
       await reducers().importWalls({ tableId, walls });
       setImportNote(`imported ${walls.length} wall segments`);
     } catch (e) {
