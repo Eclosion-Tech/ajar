@@ -109,6 +109,18 @@ export default function TableScene({ entities, walls, lights, mapImage, props, i
   );
 }
 
+// Dispose the geometry a component *replaced*, never the live one on unmount:
+// StrictMode remounts reuse the memoized geometry, so an unmount-dispose frees
+// GPU buffers still bound to the mesh (setIndexBuffer crash). The final
+// geometry per component is left for GC — tiny and bounded.
+function useReplacedGeometryDisposal(geometry: THREE.BufferGeometry | null) {
+  const prev = useRef<THREE.BufferGeometry | null>(null);
+  useEffect(() => {
+    if (prev.current && prev.current !== geometry) prev.current.dispose();
+    prev.current = geometry;
+  }, [geometry]);
+}
+
 function ProcProp({
   prop,
   dmGhost,
@@ -121,7 +133,7 @@ function ProcProp({
   onClick: () => void;
 }) {
   const geometry = useMemo(() => buildProp(prop.kind, prop.params, prop.seed), [prop.kind, prop.params, prop.seed]);
-  useEffect(() => () => geometry?.dispose(), [geometry]);
+  useReplacedGeometryDisposal(geometry);
   if (!geometry) return null;
   return (
     <group position={[prop.x, 0, prop.z]} rotation={[0, prop.rotY, 0]}>
@@ -165,7 +177,7 @@ function MapFloor({ image, onGroundClick }: { image: MapImage; onGroundClick: (x
 function MergedWalls({ walls }: { walls: Wall[] }) {
   // One merged geometry, one draw call, regardless of segment count.
   const geometry = useMemo(() => wallSegmentsToGeometry(walls), [walls]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  useReplacedGeometryDisposal(geometry);
   if (walls.length === 0) return null;
   return (
     <mesh geometry={geometry}>
