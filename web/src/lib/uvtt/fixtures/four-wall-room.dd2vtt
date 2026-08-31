@@ -1,0 +1,36 @@
+{
+  "format": 0.3,
+  "resolution": {
+    "map_origin": { "x": 10, "y": 20 },
+    "map_size": { "x": 6, "y": 4 },
+    "pixels_per_grid": 256
+  },
+  "line_of_sight": [
+    [
+      { "x": 10, "y": 20 },
+      { "x": 16, "y": 20 },
+      { "x": 16, "y": 24 },
+      { "x": 10, "y": 24 },
+      { "x": 10, "y": 20 }
+    ]
+  ],
+  "portals": [
+    {
+      "position": { "x": 13, "y": 20 },
+      "bounds": [{ "x": 12, "y": 20 }, { "x": 14, "y": 20 }],
+      "rotation": 0,
+      "closed": true,
+      "freestanding": false
+    }
+  ],
+  "lights": [
+    {
+      "position": { "x": 11.5, "y": 22 },
+      "range": 4.5,
+      "intensity": 1,
+      "color": "ffcc88ff",
+      "shadows": true
+    }
+  ],
+  "image": "AQIDBA=="
+}

@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "resolution": {
+    "map_origin": { "x": -2, "y": 5 },
+    "map_size": { "x": 3, "y": 4 },
+    "pixels_per_grid": 100
+  },
+  "line_of_sight": [
+    [
+      { "x": -2, "y": 5 },
+      { "x": 1, "y": 5 },
+      { "x": 1, "y": 9 }
+    ]
+  ]
+}

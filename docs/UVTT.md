@@ -40,7 +40,7 @@ absent `resolution` or non-array `line_of_sight`.
   overlapping wall segment (a door = a gap; door meshes come later). Default
   height 2.5, thickness 0.15 (opts-overridable).
 - `toLights(map: UvttMap): SceneLight[]` — `{ x, z, range, intensity, colorHex }`;
-  UVTT colors are RGBA hex — drop alpha.
+  UVTT colors are RGBA hex — drop alpha. (`colorHex` is numeric RGB, three-ready.)
 - `imageBlob(map: UvttMap): Uint8Array | null` — decoded map image bytes for the
   ground-plane texture.
 

@@ -45,6 +45,24 @@ Toolchain: `spacetimedb = "=2.0.3"` with `features = ["unstable"]` (row-level se
 | hidden | bool | true ⇒ DM-only |
 | created_by | Identity | |
 
+### `wall` (added for UVTT import — synced structural geometry)
+| column | type | notes |
+|---|---|---|
+| id | u64 | `#[primary_key]` `#[auto_inc]` |
+| table_id | u64 | btree index |
+| ax, az, bx, bz | f32 | segment endpoints on the ground plane |
+| height | f32 | |
+| thickness | f32 | |
+
+Public, no RLS — players see walls. Import replaces: `import_walls` deletes the
+table's existing walls, then inserts the new set.
+
+Additional reducers (both DM-only, `Result<(), String>`):
+- `import_walls(table_id: u64, walls: Vec<WallInput>)` — `WallInput` is a
+  `SpacetimeType` struct `{ ax, az, bx, bz, height, thickness: f32 }`. Replace-all
+  semantics. Reject > 4096 walls.
+- `clear_walls(table_id: u64)`
+
 ## Row-level security (the product feature)
 
 Two union-ed filters on `entity`, Pear idiom:
