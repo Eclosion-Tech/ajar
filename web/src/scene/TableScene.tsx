@@ -1,8 +1,9 @@
-import { Suspense, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
+import { wallSegmentsToGeometry } from '../lib/uvtt/geometry';
 import type { Entity, Light, MapImage, Wall } from '../module_bindings/types';
 
 type Props = {
@@ -16,10 +17,17 @@ type Props = {
   onMove: (id: bigint, x: number, z: number) => void;
 };
 
-const MAX_POINT_LIGHTS = 48;
+// Forward rendering pays for every light on every fragment: keep only the
+// strongest few as real point lights; the rest render as emissive glows.
+const POINT_LIGHT_BUDGET = 12;
 
 export default function TableScene({ entities, walls, lights, mapImage, isDm, selectedId, onSelect, onMove }: Props) {
   const lit = lights.length > 0;
+  const rankedLights = useMemo(
+    () => [...lights].sort((a, b) => b.intensity * b.range - a.intensity * a.range),
+    [lights],
+  );
+  const realLights = rankedLights.slice(0, POINT_LIGHT_BUDGET);
   return (
     <Canvas
       className="scene"
@@ -34,7 +42,7 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
     >
       <ambientLight intensity={lit ? 0.22 : 0.6} />
       <directionalLight position={[6, 12, 4]} intensity={lit ? 0.45 : 1.6} />
-      {lights.slice(0, MAX_POINT_LIGHTS).map((l) => (
+      {realLights.map((l) => (
         <pointLight
           key={l.id.toString()}
           position={[l.x, 1.6, l.z]}
@@ -43,6 +51,18 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
           distance={l.range * 2.2}
           decay={1.6}
         />
+      ))}
+      {lights.map((l) => (
+        <mesh key={`glow-${l.id.toString()}`} position={[l.x, 1.1, l.z]}>
+          <sphereGeometry args={[0.1, 8, 8]} />
+          <meshBasicMaterial
+            color={l.colorRgb}
+            transparent
+            opacity={0.85}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
       ))}
       <Ground
         onGroundClick={(x, z) => {
@@ -60,9 +80,7 @@ export default function TableScene({ entities, walls, lights, mapImage, isDm, se
           />
         </Suspense>
       )}
-      {walls.map((w) => (
-        <WallBox key={w.id.toString()} wall={w} />
-      ))}
+      <MergedWalls walls={walls} />
       {entities.map((e) => (
         <Mini
           key={e.id.toString()}
@@ -95,17 +113,13 @@ function MapFloor({ image, onGroundClick }: { image: MapImage; onGroundClick: (x
   );
 }
 
-function WallBox({ wall }: { wall: Wall }) {
-  const dx = wall.bx - wall.ax;
-  const dz = wall.bz - wall.az;
-  const len = Math.hypot(dx, dz);
-  if (len < 1e-4) return null;
+function MergedWalls({ walls }: { walls: Wall[] }) {
+  // One merged geometry, one draw call, regardless of segment count.
+  const geometry = useMemo(() => wallSegmentsToGeometry(walls), [walls]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  if (walls.length === 0) return null;
   return (
-    <mesh
-      position={[(wall.ax + wall.bx) / 2, wall.height / 2, (wall.az + wall.bz) / 2]}
-      rotation={[0, -Math.atan2(dz, dx), 0]}
-    >
-      <boxGeometry args={[len, wall.height, wall.thickness]} />
+    <mesh geometry={geometry}>
       <meshStandardMaterial color="#5c6b84" />
     </mesh>
   );
