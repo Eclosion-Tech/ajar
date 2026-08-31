@@ -209,6 +209,7 @@ function buildPlankedTop(
  */
 function facetJitter(geometry: BufferGeometry, rng: Rng, amount: number): void {
   const color = geometry.getAttribute('color');
+  if (!color) return;
   for (let tri = 0; tri < color.count / 3; tri += 1) {
     const f = 1 + jitter(rng, amount);
     for (let v = 0; v < 3; v += 1) {
@@ -272,12 +273,18 @@ export function buildTable(params: TableParams, seed: number): BufferGeometry {
     }
   }
 
-  const indexed = mergeGeometries(pieces, false) ?? new BufferGeometry();
-  for (const piece of pieces) piece.dispose();
-  // Non-indexed: flat shading wants split vertices anyway, per-triangle facet
-  // jitter needs them, and it removes the index buffer from the GPU path.
-  const merged = indexed.index ? indexed.toNonIndexed() : indexed;
-  if (merged !== indexed) indexed.dispose();
+  // Normalize every piece to non-indexed BEFORE merging — mergeGeometries
+  // refuses to mix indexed (Box/Cylinder) with non-indexed (Extrude) inputs.
+  // Non-indexed is what we want anyway: flat shading uses split vertices and
+  // the per-triangle facet jitter needs them.
+  const flattened = pieces.map((piece) => {
+    if (!piece.index) return piece;
+    const nonIndexed = piece.toNonIndexed();
+    piece.dispose();
+    return nonIndexed;
+  });
+  const merged = mergeGeometries(flattened, false) ?? new BufferGeometry();
+  for (const piece of flattened) piece.dispose();
   facetJitter(merged, rng, 0.045);
   return merged;
 }

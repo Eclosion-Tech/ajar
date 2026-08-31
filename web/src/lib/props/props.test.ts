@@ -21,6 +21,13 @@ describe('prop generators', () => {
     );
   });
 
+  it('builds round tables with real geometry (mixed indexed/extruded pieces)', () => {
+    const g = buildProp('table', JSON.stringify({ shape: 'round', width: 1.4, height: 0.75, wood: 0 }), 11n);
+    expect(g).not.toBeNull();
+    expect(g!.getAttribute('position').count).toBeGreaterThan(100);
+    expect(g!.getAttribute('color')).toBeDefined();
+  });
+
   it('has vertex colors', () => {
     const g = buildProp('table', PARAMS, 7n)!;
     expect(g.getAttribute('color')).toBeDefined();
