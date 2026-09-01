@@ -626,6 +626,7 @@ function WallProxy({
 }) {
   const [hovered, setHovered] = useState(false);
   const down = useRef<{ sx: number; sy: number } | null>(null);
+  const lastClickAt = useRef(0);
   useCursor(hovered && !armed);
   const t = wallTransform(wall.ax, wall.az, wall.bx, wall.bz);
   if (t.len < 0.01) return null;
@@ -644,12 +645,16 @@ function WallProxy({
         if (armed || e.button !== 0 || !d) return;
         if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= DRAG_THRESHOLD_PX) return;
         e.stopPropagation();
-        onWallClick(wall.id, e.nativeEvent.shiftKey);
-      }}
-      onDoubleClick={(e) => {
-        if (armed) return;
-        e.stopPropagation();
-        onWallChain(wall.id);
+        // Manual double-click detection — R3F's synthetic onDoubleClick is
+        // unreliable through raycast proxies.
+        const now = performance.now();
+        if (now - lastClickAt.current < 350) {
+          lastClickAt.current = 0;
+          onWallChain(wall.id);
+        } else {
+          lastClickAt.current = now;
+          onWallClick(wall.id, e.nativeEvent.shiftKey);
+        }
       }}
       onPointerOver={(e) => {
         if (armed) return;

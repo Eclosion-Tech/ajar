@@ -70,6 +70,7 @@ export default function Toolbar({
   onArmWall,
   selectedWalls,
   onClearWallSelection,
+  onChainSelect,
   onDeselect,
 }: {
   tableId: bigint;
@@ -81,6 +82,7 @@ export default function Toolbar({
   onArmWall: () => void;
   selectedWalls: Wall[];
   onClearWallSelection: () => void;
+  onChainSelect: () => void;
   onDeselect: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -177,7 +179,12 @@ export default function Toolbar({
         </span>
       )}
       {selectedWalls.length > 0 && (
-        <WallPanel walls={selectedWalls} onClear={onClearWallSelection} />
+        <WallPanel
+          key={selectedWalls.map((w) => w.id).join(',')}
+          walls={selectedWalls}
+          onClear={onClearWallSelection}
+          onChain={onChainSelect}
+        />
       )}
       {importNote && <span className="role-note">{importNote}</span>}
       <span className="sep" />
@@ -331,13 +338,17 @@ function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint;
   );
 }
 
-function WallPanel({ walls, onClear }: { walls: Wall[]; onClear: () => void }) {
+function WallPanel({ walls, onClear, onChain }: { walls: Wall[]; onClear: () => void; onChain: () => void }) {
   const first = walls[0];
-  // One throttle for the whole selection; ids resolved at send time.
+  // Local draft values: a controlled slider pinned to the server row can't
+  // move under the user's finger (Codex review, applied late). The parent
+  // keys this component by the selection, so drafts reset on new selections.
+  const [height, setHeight] = useState(first.height);
+  const [thickness, setThickness] = useState(first.thickness);
   const send = useRef(
-    throttled((rows: Wall[], height: number, thickness: number) => {
+    throttled((rows: Wall[], h: number, t: number) => {
       for (const w of rows) {
-        reducers().updateWall({ wallId: w.id, ax: w.ax, az: w.az, bx: w.bx, bz: w.bz, height, thickness });
+        reducers().updateWall({ wallId: w.id, ax: w.ax, az: w.az, bx: w.bx, bz: w.bz, height: h, thickness: t });
       }
     }, 150),
   ).current;
@@ -349,6 +360,7 @@ function WallPanel({ walls, onClear }: { walls: Wall[]; onClear: () => void }) {
       <span className="selected-name">
         {walls.length} wall{walls.length > 1 ? 's' : ''}
       </span>
+      <button onClick={onChain}>chain</button>
       <label className="slider">
         h
         <input
@@ -356,8 +368,12 @@ function WallPanel({ walls, onClear }: { walls: Wall[]; onClear: () => void }) {
           min={0.2}
           max={4}
           step={0.05}
-          value={first.height}
-          onChange={(e) => send.call(walls, Number(e.target.value), first.thickness)}
+          value={height}
+          onChange={(e) => {
+            const h = Number(e.target.value);
+            setHeight(h);
+            send.call(walls, h, thickness);
+          }}
         />
       </label>
       <label className="slider">
@@ -367,8 +383,12 @@ function WallPanel({ walls, onClear }: { walls: Wall[]; onClear: () => void }) {
           min={0.05}
           max={0.6}
           step={0.01}
-          value={first.thickness}
-          onChange={(e) => send.call(walls, first.height, Number(e.target.value))}
+          value={thickness}
+          onChange={(e) => {
+            const t = Number(e.target.value);
+            setThickness(t);
+            send.call(walls, height, t);
+          }}
         />
       </label>
       <button

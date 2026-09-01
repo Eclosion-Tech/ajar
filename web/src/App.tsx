@@ -345,6 +345,10 @@ export default function App() {
           }}
           selectedWalls={tableWalls.filter((w) => wallSelection.has(w.id))}
           onClearWallSelection={() => setWallSelection(new Set())}
+          onChainSelect={() => {
+            const first = tableWalls.find((w) => wallSelection.has(w.id));
+            if (first) chainSelectWall(first.id);
+          }}
           selected={
             selection?.type === 'mini' ? (tableEntities.find((e) => e.id === selection.id) ?? null) : null
           }
