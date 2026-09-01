@@ -105,11 +105,15 @@ Public. Reducers (DM-only): `set_map_image(table_id, url, width, height, offset_
 RLS: the same two union-ed filters as `entity` (`hidden = false` OR `dm_identity = :sender`).
 
 Reducers (ALL DM-only via require_table_dm; `Result<(), String>`):
-- `spawn_prop(table_id: u64, kind: String, params: String, seed: u64, x: f32, z: f32)` — reject params.len() > 4096; rot_y = 0.
+- `spawn_prop(table_id: u64, kind: String, params: String, seed: u64, x: f32, z: f32, rot_y: f32)` — reject params.len() > 4096. Ghost placement commits rotation atomically.
 - `update_prop_params(prop_id: u64, params: String)` — same length cap. Live slider edits stream through this (client throttles).
 - `move_prop(prop_id: u64, x: f32, z: f32, rot_y: f32)`
 - `set_prop_hidden(prop_id: u64, hidden: bool)`
 - `delete_prop(prop_id: u64)`
+
+Transform validation (applies to spawn_entity, move_entity, spawn_prop, move_prop):
+reject non-finite (NaN/±inf) position and rotation inputs with an error — a NaN
+transform poisons every client's render.
 
 ## Row-level security (the product feature)
 
