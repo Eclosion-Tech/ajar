@@ -46,6 +46,11 @@ const POINT_LIGHT_BUDGET = Number(params.get('lights') ?? 12);
 
 const DRAG_THRESHOLD_PX = 5;
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// Shared unit box, scaled per use: JSX geometry args that change per row
+// update make R3F dispose the old geometry immediately, racing in-flight
+// WebGPU frames (the "vertex buffer 0" pipeline death). Scaling allocates
+// nothing.
+const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
 
 function pickSpread(ranked: Light[], budget: number, minDist = 3.5): Light[] {
   const picked: Light[] = [];
@@ -626,33 +631,38 @@ function WallProxy({
   const t = wallTransform(wall.ax, wall.az, wall.bx, wall.bz);
   if (t.len < 0.01) return null;
   return (
-    <mesh
-      position={[t.cx, wall.height / 2, t.cz]}
-      rotation={[0, t.rot, 0]}
-      onPointerDown={(e) => {
-        if (armed || e.button !== 0) return;
-        e.stopPropagation();
-        down.current = { sx: e.clientX, sy: e.clientY };
-      }}
-      onPointerUp={(e) => {
-        const d = down.current;
-        down.current = null;
-        if (armed || e.button !== 0 || !d) return;
-        if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= DRAG_THRESHOLD_PX) return;
-        e.stopPropagation();
-        onWallClick(wall.id, e.nativeEvent.shiftKey);
-      }}
-      onPointerOver={(e) => {
-        if (armed) return;
-        e.stopPropagation();
-        setHovered(true);
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      <boxGeometry args={[t.len, wall.height, wall.thickness + 0.12]} />
-      <meshBasicMaterial visible={false} />
-      <mesh visible={selected || (hovered && !armed)} raycast={() => null}>
-        <boxGeometry args={[t.len + 0.02, wall.height + 0.04, wall.thickness + 0.16]} />
+    <group position={[t.cx, wall.height / 2, t.cz]} rotation={[0, t.rot, 0]}>
+      <mesh
+        geometry={UNIT_BOX}
+        scale={[t.len, wall.height, wall.thickness + 0.12]}
+        onPointerDown={(e) => {
+          if (armed || e.button !== 0) return;
+          e.stopPropagation();
+          down.current = { sx: e.clientX, sy: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          const d = down.current;
+          down.current = null;
+          if (armed || e.button !== 0 || !d) return;
+          if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= DRAG_THRESHOLD_PX) return;
+          e.stopPropagation();
+          onWallClick(wall.id, e.nativeEvent.shiftKey);
+        }}
+        onPointerOver={(e) => {
+          if (armed) return;
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => setHovered(false)}
+      >
+        <meshBasicMaterial visible={false} />
+      </mesh>
+      <mesh
+        geometry={UNIT_BOX}
+        scale={[t.len + 0.02, wall.height + 0.04, wall.thickness + 0.16]}
+        visible={selected || (hovered && !armed)}
+        raycast={() => null}
+      >
         <meshBasicMaterial
           color={selected ? '#ffd166' : '#4cc9f0'}
           transparent
@@ -660,7 +670,7 @@ function WallProxy({
           depthWrite={false}
         />
       </mesh>
-    </mesh>
+    </group>
   );
 }
 
