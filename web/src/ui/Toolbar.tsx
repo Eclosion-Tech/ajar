@@ -3,7 +3,9 @@ import { reducers } from '../stdb';
 import { EntityKind } from '../module_bindings/types';
 import type { Entity, Prop } from '../module_bindings/types';
 import { imageBlob, isUvttError, parse, toLights, toWallSegments } from '../lib/uvtt';
-import { WOOD_TONES, type TableParams } from '../lib/props';
+import { WOOD_TONES } from '../lib/props';
+import { PROP_KINDS, randomSeed, type PropKind } from '../lib/props/catalog';
+import type { Placement } from '../placement';
 
 // Per-kind param panel schemas. Generators normalize/clamp server-agnostically,
 // so the panel only needs sensible ranges, not validation.
@@ -48,7 +50,6 @@ const PROP_PANELS: Record<
   },
 };
 
-const randomSeed = () => BigInt(Math.floor(Math.random() * 0xffffffff));
 
 const BLOBD_URI = (import.meta.env.VITE_BLOBD_URI as string | undefined) ?? 'http://localhost:8787';
 
@@ -62,11 +63,15 @@ export default function Toolbar({
   tableId,
   selected,
   selectedProp,
+  placement,
+  onArm,
   onDeselect,
 }: {
   tableId: bigint;
   selected: Entity | null;
   selectedProp: Prop | null;
+  placement: Placement;
+  onArm: (kind: PropKind) => void;
   onDeselect: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -139,84 +144,21 @@ export default function Toolbar({
       />
       <button onClick={() => fileRef.current?.click()}>import map</button>
       <button onClick={() => reducers().clearWalls({ tableId })}>clear walls</button>
-      <button
-        onClick={() => {
-          const { x, z } = spawnSpot();
-          const round = Math.random() < 0.4;
-          const params: TableParams = {
-            shape: round ? 'round' : 'rect',
-            width: round ? 1.2 + Math.random() * 0.5 : 1.4 + Math.random() * 0.8,
-            depth: 0.8 + Math.random() * 0.3,
-            height: 0.72 + Math.random() * 0.06,
-            wood: Math.floor(Math.random() * WOOD_TONES.length),
-          };
-          reducers().spawnProp({ tableId, kind: 'table', params: JSON.stringify(params), seed: randomSeed(), x, z });
-        }}
-      >
-        + table
-      </button>
-      <button
-        onClick={() => {
-          const { x, z } = spawnSpot();
-          const styles = ['stool', 'chair', 'bench'] as const;
-          const style = styles[Math.floor(Math.random() * styles.length)];
-          const params = {
-            style,
-            width:
-              style === 'stool'
-                ? 0.36 + Math.random() * 0.1
-                : style === 'bench'
-                  ? 1.1 + Math.random() * 0.7
-                  : 0.45 + Math.random() * 0.14,
-            wood: Math.floor(Math.random() * WOOD_TONES.length),
-          };
-          reducers().spawnProp({ tableId, kind: 'seat', params: JSON.stringify(params), seed: randomSeed(), x, z });
-        }}
-      >
-        + seat
-      </button>
-      <button
-        onClick={() => {
-          const { x, z } = spawnSpot();
-          const params = {
-            radius: 0.27 + Math.random() * 0.1,
-            height: 0.62 + Math.random() * 0.2,
-            wood: Math.floor(Math.random() * WOOD_TONES.length),
-          };
-          reducers().spawnProp({ tableId, kind: 'barrel', params: JSON.stringify(params), seed: randomSeed(), x, z });
-        }}
-      >
-        + barrel
-      </button>
-      <button
-        onClick={() => {
-          const { x, z } = spawnSpot();
-          const params = {
-            width: 0.6 + Math.random() * 0.3,
-            depth: 0.45 + Math.random() * 0.2,
-            height: 0.45 + Math.random() * 0.2,
-            wood: Math.floor(Math.random() * WOOD_TONES.length),
-          };
-          reducers().spawnProp({ tableId, kind: 'crate', params: JSON.stringify(params), seed: randomSeed(), x, z });
-        }}
-      >
-        + crate
-      </button>
-      <button
-        onClick={() => {
-          const { x, z } = spawnSpot();
-          const width = 0.75 + Math.random() * 0.3;
-          const params = {
-            width,
-            depth: width * (0.55 + Math.random() * 0.12),
-            height: width * (0.55 + Math.random() * 0.14),
-            wood: Math.floor(Math.random() * WOOD_TONES.length),
-          };
-          reducers().spawnProp({ tableId, kind: 'chest', params: JSON.stringify(params), seed: randomSeed(), x, z });
-        }}
-      >
-        + chest
-      </button>
+      <span className="sep" />
+      {PROP_KINDS.map((kind, i) => (
+        <button
+          key={kind}
+          className={`chip ${placement?.kind === kind ? 'chip-active' : ''}`}
+          onClick={() => onArm(kind)}
+        >
+          <span className="chip-key">{i + 1}</span> {kind}
+        </button>
+      ))}
+      {placement && (
+        <span className="mode-strip">
+          placing {placement.kind} · click place · R rotate · alt free · esc done
+        </span>
+      )}
       {importNote && <span className="role-note">{importNote}</span>}
       <span className="sep" />
       <button
@@ -346,6 +288,7 @@ function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint;
             seed: randomSeed(),
             x: prop.x,
             z: prop.z,
+            rotY: prop.rotY,
           });
           reducers().deleteProp({ propId: prop.id });
           onDeselect();

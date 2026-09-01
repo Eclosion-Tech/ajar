@@ -194,8 +194,8 @@ check('set_map_image upserts a single row', true);
 // Parametric props: spawn + param edits sync; hidden props are RLS-gated;
 // players cannot edit.
 const tableParams = JSON.stringify({ shape: 'rect', width: 1.8, depth: 0.9, height: 0.75, wood: 1 });
-dm.conn.reducers.spawnProp({ tableId: table.id, kind: 'table', params: tableParams, seed: 99n, x: 2, z: 2 });
-dm.conn.reducers.spawnProp({ tableId: table.id, kind: 'chest', params: '{}', seed: 7n, x: 4, z: 4 });
+dm.conn.reducers.spawnProp({ tableId: table.id, kind: 'table', params: tableParams, seed: 99n, x: 2, z: 2, rotY: 0 });
+dm.conn.reducers.spawnProp({ tableId: table.id, kind: 'chest', params: '{}', seed: 7n, x: 4, z: 4, rotY: 0 });
 await waitFor('dm sees both props', () => {
   const rows = [...dm.conn.db.prop.iter()].filter((p) => p.tableId === table.id);
   return rows.length === 2 ? rows : undefined;
@@ -228,6 +228,15 @@ try {
   propRejected = String(e).includes('only the DM');
 }
 check('player cannot edit props', propRejected);
+
+// Non-finite transforms must be rejected server-side.
+let nanRejected = false;
+try {
+  await dm.conn.reducers.moveProp({ propId: tableProp.id, x: Number.NaN, z: 0, rotY: 0 });
+} catch {
+  nanRejected = true;
+}
+check('non-finite transforms rejected', nanRejected);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

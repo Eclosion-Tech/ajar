@@ -80,6 +80,17 @@ button:hover { background: #31405c; }
 }
 .swatch-active { outline: 2px solid #ffd166; }
 
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.chip-active { background: #31536e; border-color: #4cc9f0; }
+.chip-key {
+  background: #1d2430;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.mode-strip { font-size: 12px; color: #4cc9f0; white-space: nowrap; }
+
 .lab { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
 .lab-controls {
   width: 300px;

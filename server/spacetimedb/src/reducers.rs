@@ -102,6 +102,7 @@ pub fn spawn_entity(
     hidden: bool,
 ) -> Result<(), String> {
     let table = require_table_dm(ctx, table_id)?;
+    validate_transform(&[x, z])?;
 
     ctx.db.entity().insert(Entity {
         id: 0,
@@ -143,6 +144,7 @@ pub fn move_entity(
     if entity.hidden && entity.dm_identity != ctx.sender() {
         return Err("only the DM can move hidden entities".to_string());
     }
+    validate_transform(&[x, y, z, rot_y])?;
 
     entity.x = x;
     entity.y = y;
@@ -278,6 +280,7 @@ pub fn clear_map_image(ctx: &ReducerContext, table_id: u64) -> Result<(), String
 }
 
 #[reducer]
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_prop(
     ctx: &ReducerContext,
     table_id: u64,
@@ -286,11 +289,13 @@ pub fn spawn_prop(
     seed: u64,
     x: f32,
     z: f32,
+    rot_y: f32,
 ) -> Result<(), String> {
     let table = require_table_dm(ctx, table_id)?;
     if params.len() > 4096 {
         return Err("prop params cannot exceed 4096 bytes".to_string());
     }
+    validate_transform(&[x, z, rot_y])?;
 
     ctx.db.prop().insert(Prop {
         id: 0,
@@ -301,7 +306,7 @@ pub fn spawn_prop(
         seed,
         x,
         z,
-        rot_y: 0.0,
+        rot_y,
         hidden: false,
     });
     Ok(())
@@ -334,6 +339,7 @@ pub fn move_prop(
 ) -> Result<(), String> {
     let mut prop = find_prop(ctx, prop_id)?;
     require_table_dm(ctx, prop.table_id)?;
+    validate_transform(&[x, z, rot_y])?;
 
     prop.x = x;
     prop.z = z;
@@ -392,6 +398,14 @@ fn find_prop(ctx: &ReducerContext, prop_id: u64) -> Result<Prop, String> {
         .id()
         .find(prop_id)
         .ok_or_else(|| "prop not found".to_string())
+}
+
+fn validate_transform(values: &[f32]) -> Result<(), String> {
+    if values.iter().all(|value| value.is_finite()) {
+        Ok(())
+    } else {
+        Err("position and rotation values must be finite".to_string())
+    }
 }
 
 fn delete_walls(ctx: &ReducerContext, table_id: u64) {

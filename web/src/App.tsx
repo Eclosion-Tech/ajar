@@ -2,9 +2,21 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { store, reducers, sameIdentity } from './stdb';
 import type { GameTable } from './module_bindings/types';
 import type { Selection } from './selection';
+import type { Placement } from './placement';
+import { PROP_KINDS, draftParams, randomSeed, rememberParams, type PropKind } from './lib/props/catalog';
+import { throttled } from './throttle';
 import TableScene from './scene/TableScene';
 import Toolbar from './ui/Toolbar';
 import ImportLab from './lab/ImportLab';
+
+function safeParseParams(json: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(json) as unknown;
+    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 function useRoute(): { slug: string | null; lab: boolean } {
   const read = () => ({ slug: parseSlug(), lab: window.location.hash.startsWith('#/lab') });
@@ -28,6 +40,16 @@ export default function App() {
   const { slug, lab } = useRoute();
   const [name, setName] = useState(() => sessionStorage.getItem('display_name') ?? '');
   const [selection, setSelection] = useState<Selection>(null);
+  const [placement, setPlacement] = useState<Placement>(null);
+
+  // Stream drag positions at a bounded rate; the final exact position is sent
+  // separately on release (after cancel), so nothing is ever dropped.
+  const dragThrottle = useRef(
+    throttled((type: 'mini' | 'prop', id: bigint, x: number, z: number, rotY: number) => {
+      if (type === 'prop') reducers().moveProp({ propId: id, x, z, rotY });
+      else reducers().moveEntity({ entityId: id, x, y: 0, z, rotY });
+    }, 120),
+  ).current;
 
   const table: GameTable | undefined = snap.tables.find((t) => t.slug === slug);
   const isDm = table ? sameIdentity(table.dmIdentity, snap.identity) : false;
@@ -41,6 +63,77 @@ export default function App() {
     joinedFor.current = key;
     reducers().joinTable({ slug, displayName: name });
   }, [snap.subscribed, slug, table, name]);
+
+  // Clear stale state: a deleted row must not linger as a selection, and
+  // leaving the table drops any armed placement.
+  useEffect(() => {
+    if (!selection) return;
+    const exists =
+      selection.type === 'prop'
+        ? snap.props.some((p) => p.id === selection.id)
+        : snap.entities.some((e) => e.id === selection.id);
+    if (!exists) setSelection(null);
+  }, [snap.props, snap.entities, selection]);
+
+  useEffect(() => {
+    if (!slug) {
+      setPlacement(null);
+      setSelection(null);
+    }
+  }, [slug]);
+
+  // Keyboard: Esc exit/deselect · 1-5 arm palette · R rotate · D duplicate · Delete.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable)) return;
+      const tbl = snap.tables.find((row) => row.slug === slug);
+      if (!tbl) return;
+      const dm = sameIdentity(tbl.dmIdentity, snap.identity);
+
+      if (e.key === 'Escape') {
+        if (placement) setPlacement(null);
+        else setSelection(null);
+        return;
+      }
+      const digit = Number(e.key);
+      if (dm && Number.isInteger(digit) && digit >= 1 && digit <= PROP_KINDS.length) {
+        const kind = PROP_KINDS[digit - 1];
+        setPlacement((p) =>
+          p?.kind === kind ? null : { kind, params: draftParams(kind), seed: randomSeed(), rotY: 0 },
+        );
+        return;
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        if (placement) {
+          setPlacement({ ...placement, rotY: placement.rotY + Math.PI / 4 });
+        } else if (dm && selection?.type === 'prop') {
+          const row = snap.props.find((p) => p.id === selection.id);
+          if (row) reducers().moveProp({ propId: row.id, x: row.x, z: row.z, rotY: row.rotY + Math.PI / 4 });
+        }
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && dm && selection) {
+        if (selection.type === 'prop') reducers().deleteProp({ propId: selection.id });
+        else reducers().deleteEntity({ entityId: selection.id });
+        setSelection(null);
+        return;
+      }
+      if ((e.key === 'd' || e.key === 'D') && dm && selection?.type === 'prop') {
+        const row = snap.props.find((p) => p.id === selection.id);
+        if (row && (PROP_KINDS as readonly string[]).includes(row.kind)) {
+          setPlacement({
+            kind: row.kind as PropKind,
+            params: safeParseParams(row.params),
+            seed: randomSeed(),
+            rotY: row.rotY,
+          });
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [slug, snap, selection, placement]);
 
   // The import lab needs no table connection.
   if (lab) return <ImportLab />;
@@ -72,6 +165,16 @@ export default function App() {
   const tableProps = snap.props.filter((p) => p.tableId === table.id);
   const tableParticipants = snap.participants.filter((p) => p.tableId === table.id && p.online);
 
+  const rowRotY = (type: 'mini' | 'prop', id: bigint): number =>
+    type === 'prop'
+      ? (tableProps.find((p) => p.id === id)?.rotY ?? 0)
+      : (tableEntities.find((e) => e.id === id)?.rotY ?? 0);
+
+  const armPlacement = (kind: PropKind) =>
+    setPlacement((p) =>
+      p?.kind === kind ? null : { kind, params: draftParams(kind), seed: randomSeed(), rotY: 0 },
+    );
+
   return (
     <div className="table-view">
       <TableScene
@@ -82,15 +185,28 @@ export default function App() {
         props={tableProps}
         isDm={isDm}
         selection={selection}
+        placement={isDm ? placement : null}
         onSelect={setSelection}
-        onMove={(x, z) => {
-          if (!selection) return;
-          if (selection.type === 'mini') {
-            reducers().moveEntity({ entityId: selection.id, x, y: 0, z, rotY: 0 });
-          } else if (isDm) {
-            const prop = tableProps.find((p) => p.id === selection.id);
-            reducers().moveProp({ propId: selection.id, x, z, rotY: prop?.rotY ?? 0 });
-          }
+        onPlace={(x, z, rotY) => {
+          if (!placement) return;
+          reducers().spawnProp({
+            tableId: table.id,
+            kind: placement.kind,
+            params: JSON.stringify(placement.params),
+            seed: placement.seed,
+            x,
+            z,
+            rotY,
+          });
+          rememberParams(placement.kind, placement.params);
+          setPlacement({ ...placement, seed: randomSeed(), rotY });
+        }}
+        onDragMove={(type, id, x, z) => dragThrottle.call(type, id, x, z, rowRotY(type, id))}
+        onDragEnd={(type, id, x, z) => {
+          dragThrottle.cancel();
+          const rotY = rowRotY(type, id);
+          if (type === 'prop') reducers().moveProp({ propId: id, x, z, rotY });
+          else reducers().moveEntity({ entityId: id, x, y: 0, z, rotY });
         }}
       />
       <div className="hud hud-top">
@@ -114,6 +230,8 @@ export default function App() {
       {isDm && (
         <Toolbar
           tableId={table.id}
+          placement={placement}
+          onArm={armPlacement}
           selected={
             selection?.type === 'mini' ? (tableEntities.find((e) => e.id === selection.id) ?? null) : null
           }

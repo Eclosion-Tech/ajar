@@ -17,4 +17,5 @@ export default {
   seed: __t.u64(),
   x: __t.f32(),
   z: __t.f32(),
+  rotY: __t.f32(),
 };
