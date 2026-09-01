@@ -1,6 +1,6 @@
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useLoader, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, useCursor } from '@react-three/drei';
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { wallSegmentsToGeometry } from '../lib/uvtt/geometry';
@@ -322,11 +322,17 @@ const scratchTarget = new THREE.Vector3();
 
 // Dispose the geometry a component *replaced*, never the live one on unmount:
 // StrictMode remounts reuse the memoized geometry, so an unmount-dispose frees
-// GPU buffers still bound to the mesh (setIndexBuffer crash).
+// GPU buffers still bound to the mesh (setIndexBuffer crash). Disposal is
+// DEFERRED because the WebGPU renderer can still reference the old buffers in
+// an in-flight frame — immediate dispose under rapid param edits eventually
+// kills the pipeline ("requires vertex buffer 0 to be set" freeze).
 function useReplacedGeometryDisposal(geometry: THREE.BufferGeometry | null) {
   const prev = useRef<THREE.BufferGeometry | null>(null);
   useEffect(() => {
-    if (prev.current && prev.current !== geometry) prev.current.dispose();
+    if (prev.current && prev.current !== geometry) {
+      const old = prev.current;
+      setTimeout(() => old.dispose(), 300);
+    }
     prev.current = geometry;
   }, [geometry]);
 }
@@ -377,6 +383,8 @@ function ProcProp({
   dragApi: DragApi;
 }) {
   const group = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered);
   const geometry = useMemo(() => buildProp(prop.kind, prop.params, prop.seed), [prop.kind, prop.params, prop.seed]);
   useReplacedGeometryDisposal(geometry);
   useAuthoritativePosition(
@@ -393,6 +401,11 @@ function ProcProp({
         onPointerDown={(e) => dragApi.begin(e, 'prop', prop.id, prop.x, prop.z, group.current)}
         onPointerMove={dragApi.move}
         onPointerUp={dragApi.end}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => setHovered(false)}
       >
         <meshStandardMaterial
           vertexColors
@@ -400,6 +413,8 @@ function ProcProp({
           map={woodGrainTexture()}
           roughness={0.92}
           metalness={0}
+          emissive="#4cc9f0"
+          emissiveIntensity={hovered ? 0.18 : 0}
           transparent={dmGhost}
           opacity={dmGhost ? 0.45 : 1}
         />
@@ -428,6 +443,8 @@ function Mini({
   dragApi: DragApi;
 }) {
   const group = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered);
   useAuthoritativePosition(
     group,
     entity.x,
@@ -441,9 +458,20 @@ function Mini({
         onPointerDown={(e) => dragApi.begin(e, 'mini', entity.id, entity.x, entity.z, group.current)}
         onPointerMove={dragApi.move}
         onPointerUp={dragApi.end}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => setHovered(false)}
       >
         <capsuleGeometry args={[0.35, 0.8, 6, 16]} />
-        <meshStandardMaterial color={entity.color} transparent={dmGhost} opacity={dmGhost ? 0.45 : 1} />
+        <meshStandardMaterial
+          color={entity.color}
+          emissive="#ffffff"
+          emissiveIntensity={hovered ? 0.15 : 0}
+          transparent={dmGhost}
+          opacity={dmGhost ? 0.45 : 1}
+        />
       </mesh>
       {selected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
