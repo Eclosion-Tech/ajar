@@ -22,7 +22,13 @@ type Props = {
   isDm: boolean;
   selection: Selection;
   placement: Placement;
+  wallSelection: ReadonlySet<bigint>;
+  wallDraw: { start: { x: number; z: number } | null } | null;
   onSelect: (sel: Selection) => void;
+  onWallClick: (id: bigint, additive: boolean) => void;
+  onWallChain: (id: bigint) => void;
+  onWallEndpoint: (id: bigint, end: 'a' | 'b', x: number, z: number, commit: boolean) => void;
+  onWallDrawPoint: (x: number, z: number) => void;
   onPlace: (x: number, z: number, rotY: number) => void;
   onDragMove: (type: DragKind, id: bigint, x: number, z: number) => void;
   onDragEnd: (type: DragKind, id: bigint, x: number, z: number) => void;
@@ -56,6 +62,45 @@ function pickSpread(ranked: Light[], budget: number, minDist = 3.5): Light[] {
 }
 
 const snap = (v: number, step: number, free: boolean) => (free ? v : Math.round(v / step) * step);
+
+/** Grid-snap a point, then weld to any nearby existing wall endpoint so drawn
+ * and dragged chains stay watertight. */
+function weldSnap(
+  x: number,
+  z: number,
+  walls: Wall[],
+  excludeId: bigint | null,
+  free: boolean,
+): { x: number; z: number } {
+  let wx = snap(x, PROP_SNAP, free);
+  let wz = snap(z, PROP_SNAP, free);
+  let best = 0.25;
+  for (const w of walls) {
+    if (excludeId !== null && w.id === excludeId) continue;
+    for (const [ex, ez] of [
+      [w.ax, w.az],
+      [w.bx, w.bz],
+    ] as const) {
+      const d = Math.hypot(x - ex, z - ez);
+      if (d < best) {
+        best = d;
+        wx = ex;
+        wz = ez;
+      }
+    }
+  }
+  return { x: wx, z: wz };
+}
+
+/** Midpoint/orientation transform for a wall-segment box. */
+function wallTransform(ax: number, az: number, bx: number, bz: number) {
+  return {
+    len: Math.hypot(bx - ax, bz - az),
+    cx: (ax + bx) / 2,
+    cz: (az + bz) / 2,
+    rot: -Math.atan2(bz - az, bx - ax),
+  };
+}
 
 /** Intersect the event's ray with the y=0 plane — captured-event hit points
  * stay on the captured object, so never use e.point during a drag. */
@@ -103,7 +148,13 @@ function SceneContent({
   isDm,
   selection,
   placement,
+  wallSelection,
+  wallDraw,
   onSelect,
+  onWallClick,
+  onWallChain,
+  onWallEndpoint,
+  onWallDrawPoint,
   onPlace,
   onDragMove,
   onDragEnd,
@@ -117,8 +168,23 @@ function SceneContent({
   const controls = useThree((s) => s.controls as { enabled: boolean } | null);
   const drag = useRef<DragState | null>(null);
   const ghostGroup = useRef<THREE.Group | null>(null);
+  const drawGhost = useRef<THREE.Mesh | null>(null);
+  const drawCursor = useRef<THREE.Mesh | null>(null);
   const surfaceDown = useRef<{ sx: number; sy: number } | null>(null);
   const scratch = useMemo(() => new THREE.Vector3(), []);
+  const modeArmed = placement !== null || wallDraw !== null;
+
+  // Shift axis-locks the pending draw segment to the dominant axis.
+  const drawPoint = (e: ThreeEvent<PointerEvent>): { x: number; z: number } | null => {
+    if (!groundPoint(e, scratch)) return null;
+    let { x, z } = weldSnap(scratch.x, scratch.z, walls, null, e.nativeEvent.altKey);
+    const start = wallDraw?.start;
+    if (start && e.nativeEvent.shiftKey) {
+      if (Math.abs(x - start.x) >= Math.abs(z - start.z)) z = start.z;
+      else x = start.x;
+    }
+    return { x, z };
+  };
 
   const surfaceSize = Math.max(
     80,
@@ -213,7 +279,27 @@ function SceneContent({
           if (e.button === 0) surfaceDown.current = { sx: e.clientX, sy: e.clientY };
         }}
         onPointerMove={(e) => {
-          if (drag.current || !placement) return;
+          if (drag.current) return;
+          if (wallDraw) {
+            const p = drawPoint(e);
+            if (!p) return;
+            drawCursor.current?.position.set(p.x, 0.06, p.z);
+            const m = drawGhost.current;
+            if (m) {
+              const start = wallDraw.start;
+              if (start) {
+                const t = wallTransform(start.x, start.z, p.x, p.z);
+                m.visible = t.len > 0.01;
+                m.position.set(t.cx, 1.25, t.cz);
+                m.rotation.y = t.rot;
+                m.scale.setX(Math.max(t.len, 0.001));
+              } else {
+                m.visible = false;
+              }
+            }
+            return;
+          }
+          if (!placement) return;
           if (!groundPoint(e, scratch)) return;
           const free = e.nativeEvent.altKey;
           ghostGroup.current?.position.set(
@@ -227,7 +313,10 @@ function SceneContent({
           surfaceDown.current = null;
           if (drag.current || e.button !== 0 || !down) return;
           if (Math.hypot(e.clientX - down.sx, e.clientY - down.sy) >= DRAG_THRESHOLD_PX) return; // orbit
-          if (placement) {
+          if (wallDraw) {
+            const p = drawPoint(e);
+            if (p) onWallDrawPoint(p.x, p.z);
+          } else if (placement) {
             if (!groundPoint(e, scratch)) return;
             const free = e.nativeEvent.altKey;
             onPlace(snap(scratch.x, PROP_SNAP, free), snap(scratch.z, PROP_SNAP, free), placement.rotY);
@@ -253,6 +342,36 @@ function SceneContent({
         </Suspense>
       )}
       <MergedWalls walls={walls} />
+
+      {isDm &&
+        walls.map((w) => (
+          <WallProxy
+            key={w.id.toString()}
+            wall={w}
+            armed={modeArmed}
+            selected={wallSelection.has(w.id)}
+            onWallClick={onWallClick}
+            onWallChain={onWallChain}
+          />
+        ))}
+      {isDm &&
+        wallSelection.size === 1 &&
+        (() => {
+          const w = walls.find((row) => wallSelection.has(row.id));
+          return w ? <WallHandles wall={w} walls={walls} onWallEndpoint={onWallEndpoint} /> : null;
+        })()}
+      {wallDraw && (
+        <>
+          <mesh ref={drawCursor} position={[0, 0.06, 0]}>
+            <sphereGeometry args={[0.12, 10, 10]} />
+            <meshBasicMaterial color="#4cc9f0" />
+          </mesh>
+          <mesh ref={drawGhost} visible={false}>
+            <boxGeometry args={[1, 2.5, 0.15]} />
+            <meshBasicMaterial color="#4cc9f0" transparent opacity={0.35} depthWrite={false} />
+          </mesh>
+        </>
+      )}
 
       {placement && <Ghost placement={placement} groupRef={ghostGroup} />}
 
@@ -486,6 +605,132 @@ function Mini({
         </mesh>
       )}
     </group>
+  );
+}
+
+/** Invisible raycast proxy per wall segment: the merged wall render stays one
+ * draw call; this is what makes individual segments clickable. Carries the
+ * hover/selection highlight as a child. */
+function WallProxy({
+  wall,
+  armed,
+  selected,
+  onWallClick,
+  onWallChain,
+}: {
+  wall: Wall;
+  armed: boolean;
+  selected: boolean;
+  onWallClick: (id: bigint, additive: boolean) => void;
+  onWallChain: (id: bigint) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const down = useRef<{ sx: number; sy: number } | null>(null);
+  useCursor(hovered && !armed);
+  const t = wallTransform(wall.ax, wall.az, wall.bx, wall.bz);
+  if (t.len < 0.01) return null;
+  return (
+    <mesh
+      position={[t.cx, wall.height / 2, t.cz]}
+      rotation={[0, t.rot, 0]}
+      onPointerDown={(e) => {
+        if (armed || e.button !== 0) return;
+        e.stopPropagation();
+        down.current = { sx: e.clientX, sy: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const d = down.current;
+        down.current = null;
+        if (armed || e.button !== 0 || !d) return;
+        if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= DRAG_THRESHOLD_PX) return;
+        e.stopPropagation();
+        onWallClick(wall.id, e.nativeEvent.shiftKey);
+      }}
+      onDoubleClick={(e) => {
+        if (armed) return;
+        e.stopPropagation();
+        onWallChain(wall.id);
+      }}
+      onPointerOver={(e) => {
+        if (armed) return;
+        e.stopPropagation();
+        setHovered(true);
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
+      <boxGeometry args={[t.len, wall.height, wall.thickness + 0.12]} />
+      <meshBasicMaterial visible={false} />
+      <mesh visible={selected || (hovered && !armed)} raycast={() => null}>
+        <boxGeometry args={[t.len + 0.02, wall.height + 0.04, wall.thickness + 0.16]} />
+        <meshBasicMaterial
+          color={selected ? '#ffd166' : '#4cc9f0'}
+          transparent
+          opacity={selected ? 0.28 : 0.15}
+          depthWrite={false}
+        />
+      </mesh>
+    </mesh>
+  );
+}
+
+/** Draggable endpoint spheres for a single selected wall. */
+function WallHandles({
+  wall,
+  walls,
+  onWallEndpoint,
+}: {
+  wall: Wall;
+  walls: Wall[];
+  onWallEndpoint: (id: bigint, end: 'a' | 'b', x: number, z: number, commit: boolean) => void;
+}) {
+  const controls = useThree((s) => s.controls as { enabled: boolean } | null);
+  const active = useRef<'a' | 'b' | null>(null);
+  const scratch = useMemo(() => new THREE.Vector3(), []);
+
+  const resolve = (e: ThreeEvent<PointerEvent>) => {
+    if (!e.ray.intersectPlane(GROUND_PLANE, scratch)) return null;
+    return weldSnap(scratch.x, scratch.z, walls, wall.id, e.nativeEvent.altKey);
+  };
+
+  const handle = (end: 'a' | 'b') => {
+    const x = end === 'a' ? wall.ax : wall.bx;
+    const z = end === 'a' ? wall.az : wall.bz;
+    return (
+      <mesh
+        position={[x, wall.height + 0.15, z]}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          (e.target as Element).setPointerCapture(e.pointerId);
+          active.current = end;
+          if (controls) controls.enabled = false;
+        }}
+        onPointerMove={(e) => {
+          if (active.current !== end) return;
+          e.stopPropagation();
+          const p = resolve(e);
+          if (p) onWallEndpoint(wall.id, end, p.x, p.z, false);
+        }}
+        onPointerUp={(e) => {
+          if (active.current !== end) return;
+          e.stopPropagation();
+          active.current = null;
+          if (controls) controls.enabled = true;
+          const p = resolve(e);
+          if (p) onWallEndpoint(wall.id, end, p.x, p.z, true);
+        }}
+      >
+        <sphereGeometry args={[0.16, 12, 12]} />
+        <meshBasicMaterial color="#ffd166" />
+      </mesh>
+    );
+  };
+
+  return (
+    <>
+      {handle('a')}
+      {handle('b')}
+    </>
   );
 }
 

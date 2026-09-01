@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { reducers } from '../stdb';
 import { EntityKind } from '../module_bindings/types';
-import type { Entity, Prop } from '../module_bindings/types';
+import type { Entity, Prop, Wall } from '../module_bindings/types';
+import { throttled } from '../throttle';
 import { imageBlob, isUvttError, parse, toLights, toWallSegments } from '../lib/uvtt';
 import { WOOD_TONES } from '../lib/props';
 import { PROP_KINDS, randomSeed, type PropKind } from '../lib/props/catalog';
@@ -65,6 +66,10 @@ export default function Toolbar({
   selectedProp,
   placement,
   onArm,
+  wallDrawArmed,
+  onArmWall,
+  selectedWalls,
+  onClearWallSelection,
   onDeselect,
 }: {
   tableId: bigint;
@@ -72,6 +77,10 @@ export default function Toolbar({
   selectedProp: Prop | null;
   placement: Placement;
   onArm: (kind: PropKind) => void;
+  wallDrawArmed: boolean;
+  onArmWall: () => void;
+  selectedWalls: Wall[];
+  onClearWallSelection: () => void;
   onDeselect: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -154,10 +163,21 @@ export default function Toolbar({
           <span className="chip-key">{i + 1}</span> {kind}
         </button>
       ))}
+      <button className={`chip ${wallDrawArmed ? 'chip-active' : ''}`} onClick={onArmWall}>
+        <span className="chip-key">6</span> wall
+      </button>
       {placement && (
         <span className="mode-strip">
           placing {placement.kind} · click place · R rotate · alt free · esc done
         </span>
+      )}
+      {wallDrawArmed && (
+        <span className="mode-strip">
+          drawing walls · click to chain · shift axis-lock · alt free · esc done
+        </span>
+      )}
+      {selectedWalls.length > 0 && (
+        <WallPanel walls={selectedWalls} onClear={onClearWallSelection} />
       )}
       {importNote && <span className="role-note">{importNote}</span>}
       <span className="sep" />
@@ -303,6 +323,58 @@ function PropPanel({ prop, tableId, onDeselect }: { prop: Prop; tableId: bigint;
         onClick={() => {
           reducers().deleteProp({ propId: prop.id });
           onDeselect();
+        }}
+      >
+        delete
+      </button>
+    </>
+  );
+}
+
+function WallPanel({ walls, onClear }: { walls: Wall[]; onClear: () => void }) {
+  const first = walls[0];
+  // One throttle for the whole selection; ids resolved at send time.
+  const send = useRef(
+    throttled((rows: Wall[], height: number, thickness: number) => {
+      for (const w of rows) {
+        reducers().updateWall({ wallId: w.id, ax: w.ax, az: w.az, bx: w.bx, bz: w.bz, height, thickness });
+      }
+    }, 150),
+  ).current;
+  useEffect(() => () => send.flush(), [send]);
+
+  return (
+    <>
+      <span className="sep" />
+      <span className="selected-name">
+        {walls.length} wall{walls.length > 1 ? 's' : ''}
+      </span>
+      <label className="slider">
+        h
+        <input
+          type="range"
+          min={0.2}
+          max={4}
+          step={0.05}
+          value={first.height}
+          onChange={(e) => send.call(walls, Number(e.target.value), first.thickness)}
+        />
+      </label>
+      <label className="slider">
+        t
+        <input
+          type="range"
+          min={0.05}
+          max={0.6}
+          step={0.01}
+          value={first.thickness}
+          onChange={(e) => send.call(walls, first.height, Number(e.target.value))}
+        />
+      </label>
+      <button
+        onClick={() => {
+          for (const w of walls) reducers().deleteWall({ wallId: w.id });
+          onClear();
         }}
       >
         delete

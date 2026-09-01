@@ -207,6 +207,70 @@ pub fn clear_walls(ctx: &ReducerContext, table_id: u64) -> Result<(), String> {
 }
 
 #[reducer]
+#[allow(clippy::too_many_arguments)]
+pub fn add_wall(
+    ctx: &ReducerContext,
+    table_id: u64,
+    ax: f32,
+    az: f32,
+    bx: f32,
+    bz: f32,
+    height: f32,
+    thickness: f32,
+) -> Result<(), String> {
+    require_table_dm(ctx, table_id)?;
+    validate_transform(&[ax, az, bx, bz, height, thickness])?;
+    validate_wall_dimensions(height, thickness)?;
+
+    ctx.db.wall().insert(Wall {
+        id: 0,
+        table_id,
+        ax,
+        az,
+        bx,
+        bz,
+        height,
+        thickness,
+    });
+    Ok(())
+}
+
+#[reducer]
+#[allow(clippy::too_many_arguments)]
+pub fn update_wall(
+    ctx: &ReducerContext,
+    wall_id: u64,
+    ax: f32,
+    az: f32,
+    bx: f32,
+    bz: f32,
+    height: f32,
+    thickness: f32,
+) -> Result<(), String> {
+    let mut wall = find_wall(ctx, wall_id)?;
+    require_table_dm(ctx, wall.table_id)?;
+    validate_transform(&[ax, az, bx, bz, height, thickness])?;
+    validate_wall_dimensions(height, thickness)?;
+
+    wall.ax = ax;
+    wall.az = az;
+    wall.bx = bx;
+    wall.bz = bz;
+    wall.height = height;
+    wall.thickness = thickness;
+    ctx.db.wall().id().update(wall);
+    Ok(())
+}
+
+#[reducer]
+pub fn delete_wall(ctx: &ReducerContext, wall_id: u64) -> Result<(), String> {
+    let wall = find_wall(ctx, wall_id)?;
+    require_table_dm(ctx, wall.table_id)?;
+    ctx.db.wall().id().delete(wall_id);
+    Ok(())
+}
+
+#[reducer]
 pub fn import_lights(
     ctx: &ReducerContext,
     table_id: u64,
@@ -400,11 +464,27 @@ fn find_prop(ctx: &ReducerContext, prop_id: u64) -> Result<Prop, String> {
         .ok_or_else(|| "prop not found".to_string())
 }
 
+fn find_wall(ctx: &ReducerContext, wall_id: u64) -> Result<Wall, String> {
+    ctx.db
+        .wall()
+        .id()
+        .find(wall_id)
+        .ok_or_else(|| "wall not found".to_string())
+}
+
 fn validate_transform(values: &[f32]) -> Result<(), String> {
     if values.iter().all(|value| value.is_finite()) {
         Ok(())
     } else {
         Err("position and rotation values must be finite".to_string())
+    }
+}
+
+fn validate_wall_dimensions(height: f32, thickness: f32) -> Result<(), String> {
+    if height > 0.0 && thickness > 0.0 {
+        Ok(())
+    } else {
+        Err("wall height and thickness must be greater than zero".to_string())
     }
 }
 

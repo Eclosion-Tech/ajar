@@ -229,6 +229,36 @@ try {
 }
 check('player cannot edit props', propRejected);
 
+// Per-wall editing: add, update (the bar-to-counter fix), delete; DM-only.
+dm.conn.reducers.addWall({ tableId: table.id, ax: 10, az: 10, bx: 12, bz: 10, height: 2.5, thickness: 0.15 });
+const drawn = await waitFor('drawn wall reaches player', () =>
+  [...player.conn.db.wall.iter()].find((w) => w.tableId === table.id && w.ax === 10 && w.az === 10),
+);
+check('add_wall syncs to player replica', true);
+
+dm.conn.reducers.updateWall({
+  wallId: drawn.id, ax: drawn.ax, az: drawn.az, bx: drawn.bx, bz: drawn.bz, height: 0.95, thickness: drawn.thickness,
+});
+await waitFor('height edit reaches player', () => {
+  const row = [...player.conn.db.wall.iter()].find((w) => w.id === drawn.id);
+  return row && Math.abs(row.height - 0.95) < 1e-4 ? row : undefined;
+});
+check('update_wall (bar-to-counter height) syncs', true);
+
+let wallEditRejected = false;
+try {
+  await player.conn.reducers.deleteWall({ wallId: drawn.id });
+} catch (e) {
+  wallEditRejected = String(e).includes('only the DM');
+}
+check('player cannot delete walls', wallEditRejected);
+
+dm.conn.reducers.deleteWall({ wallId: drawn.id });
+await waitFor('deleted wall leaves player replica', () =>
+  [...player.conn.db.wall.iter()].some((w) => w.id === drawn.id) ? undefined : true,
+);
+check('delete_wall syncs', true);
+
 // Non-finite transforms must be rejected server-side.
 let nanRejected = false;
 try {

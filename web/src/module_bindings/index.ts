@@ -34,12 +34,14 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddWallReducer from "./add_wall_reducer";
 import ClearLightsReducer from "./clear_lights_reducer";
 import ClearMapImageReducer from "./clear_map_image_reducer";
 import ClearWallsReducer from "./clear_walls_reducer";
 import CreateTableReducer from "./create_table_reducer";
 import DeleteEntityReducer from "./delete_entity_reducer";
 import DeletePropReducer from "./delete_prop_reducer";
+import DeleteWallReducer from "./delete_wall_reducer";
 import ImportLightsReducer from "./import_lights_reducer";
 import ImportWallsReducer from "./import_walls_reducer";
 import JoinTableReducer from "./join_table_reducer";
@@ -52,6 +54,7 @@ import SetPropHiddenReducer from "./set_prop_hidden_reducer";
 import SpawnEntityReducer from "./spawn_entity_reducer";
 import SpawnPropReducer from "./spawn_prop_reducer";
 import UpdatePropParamsReducer from "./update_prop_params_reducer";
+import UpdateWallReducer from "./update_wall_reducer";
 
 // Import all procedure arg schemas
 
@@ -174,12 +177,14 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("add_wall", AddWallReducer),
   __reducerSchema("clear_lights", ClearLightsReducer),
   __reducerSchema("clear_map_image", ClearMapImageReducer),
   __reducerSchema("clear_walls", ClearWallsReducer),
   __reducerSchema("create_table", CreateTableReducer),
   __reducerSchema("delete_entity", DeleteEntityReducer),
   __reducerSchema("delete_prop", DeletePropReducer),
+  __reducerSchema("delete_wall", DeleteWallReducer),
   __reducerSchema("import_lights", ImportLightsReducer),
   __reducerSchema("import_walls", ImportWallsReducer),
   __reducerSchema("join_table", JoinTableReducer),
@@ -192,6 +197,7 @@ const reducersSchema = __reducers(
   __reducerSchema("spawn_entity", SpawnEntityReducer),
   __reducerSchema("spawn_prop", SpawnPropReducer),
   __reducerSchema("update_prop_params", UpdatePropParamsReducer),
+  __reducerSchema("update_wall", UpdateWallReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

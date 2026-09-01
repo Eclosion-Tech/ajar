@@ -41,6 +41,10 @@ export default function App() {
   const [name, setName] = useState(() => sessionStorage.getItem('display_name') ?? '');
   const [selection, setSelection] = useState<Selection>(null);
   const [placement, setPlacement] = useState<Placement>(null);
+  // Walls fork their own multi-selection (a bar run is many segments); never
+  // mixed with the single prop/mini selection.
+  const [wallSelection, setWallSelection] = useState<ReadonlySet<bigint>>(new Set());
+  const [wallDraw, setWallDraw] = useState<null | { start: { x: number; z: number } | null }>(null);
 
   // Stream drag positions at a bounded rate; the final exact position is sent
   // separately on release (after cancel), so nothing is ever dropped.
@@ -49,6 +53,13 @@ export default function App() {
       if (type === 'prop') reducers().moveProp({ propId: id, x, z, rotY });
       else reducers().moveEntity({ entityId: id, x, y: 0, z, rotY });
     }, 120),
+  ).current;
+  const wallThrottle = useRef(
+    throttled(
+      (id: bigint, ax: number, az: number, bx: number, bz: number, height: number, thickness: number) =>
+        reducers().updateWall({ wallId: id, ax, az, bx, bz, height, thickness }),
+      120,
+    ),
   ).current;
 
   const table: GameTable | undefined = snap.tables.find((t) => t.slug === slug);
@@ -79,8 +90,17 @@ export default function App() {
     if (!slug) {
       setPlacement(null);
       setSelection(null);
+      setWallSelection(new Set());
+      setWallDraw(null);
     }
   }, [slug]);
+
+  // Prune wall selection ids whose rows disappeared.
+  useEffect(() => {
+    if (wallSelection.size === 0) return;
+    const live = new Set([...wallSelection].filter((id) => snap.walls.some((w) => w.id === id)));
+    if (live.size !== wallSelection.size) setWallSelection(live);
+  }, [snap.walls, wallSelection]);
 
   // Keyboard: Esc exit/deselect · 1-5 arm palette · R rotate · D duplicate · Delete.
   useEffect(() => {
@@ -92,8 +112,17 @@ export default function App() {
       const dm = sameIdentity(tbl.dmIdentity, snap.identity);
 
       if (e.key === 'Escape') {
-        if (placement) setPlacement(null);
+        if (wallDraw?.start) setWallDraw({ start: null });
+        else if (wallDraw) setWallDraw(null);
+        else if (placement) setPlacement(null);
+        else if (wallSelection.size > 0) setWallSelection(new Set());
         else setSelection(null);
+        return;
+      }
+      if (dm && e.key === '6') {
+        setWallDraw((w) => (w ? null : { start: null }));
+        setPlacement(null);
+        setWallSelection(new Set());
         return;
       }
       const digit = Number(e.key);
@@ -102,6 +131,8 @@ export default function App() {
         setPlacement((p) =>
           p?.kind === kind ? null : { kind, params: draftParams(kind), seed: randomSeed(), rotY: 0 },
         );
+        setWallDraw(null);
+        setWallSelection(new Set());
         return;
       }
       if (e.key === 'r' || e.key === 'R') {
@@ -111,6 +142,11 @@ export default function App() {
           const row = snap.props.find((p) => p.id === selection.id);
           if (row) reducers().moveProp({ propId: row.id, x: row.x, z: row.z, rotY: row.rotY + Math.PI / 4 });
         }
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && dm && wallSelection.size > 0) {
+        for (const id of wallSelection) reducers().deleteWall({ wallId: id });
+        setWallSelection(new Set());
         return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && dm && selection) {
@@ -133,7 +169,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [slug, snap, selection, placement]);
+  }, [slug, snap, selection, placement, wallSelection, wallDraw]);
 
   // The import lab needs no table connection.
   if (lab) return <ImportLab />;
@@ -170,10 +206,49 @@ export default function App() {
       ? (tableProps.find((p) => p.id === id)?.rotY ?? 0)
       : (tableEntities.find((e) => e.id === id)?.rotY ?? 0);
 
-  const armPlacement = (kind: PropKind) =>
+  const armPlacement = (kind: PropKind) => {
     setPlacement((p) =>
       p?.kind === kind ? null : { kind, params: draftParams(kind), seed: randomSeed(), rotY: 0 },
     );
+    setWallDraw(null);
+    setWallSelection(new Set());
+  };
+
+  const selectWall = (id: bigint, additive: boolean) => {
+    setSelection(null);
+    setWallSelection((prev) => {
+      const next = new Set(additive ? prev : []);
+      if (additive && next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Walk connected segments (shared endpoints) — the whole bar in one gesture.
+  const chainSelectWall = (id: bigint) => {
+    const eps = 0.02;
+    const near = (x1: number, z1: number, x2: number, z2: number) => Math.hypot(x1 - x2, z1 - z2) < eps;
+    const selected = new Set<bigint>([id]);
+    const queue = [id];
+    while (queue.length > 0) {
+      const w = tableWalls.find((row) => row.id === queue.pop());
+      if (!w) continue;
+      for (const o of tableWalls) {
+        if (selected.has(o.id)) continue;
+        if (
+          near(w.ax, w.az, o.ax, o.az) ||
+          near(w.ax, w.az, o.bx, o.bz) ||
+          near(w.bx, w.bz, o.ax, o.az) ||
+          near(w.bx, w.bz, o.bx, o.bz)
+        ) {
+          selected.add(o.id);
+          queue.push(o.id);
+        }
+      }
+    }
+    setSelection(null);
+    setWallSelection(selected);
+  };
 
   return (
     <div className="table-view">
@@ -186,7 +261,37 @@ export default function App() {
         isDm={isDm}
         selection={selection}
         placement={isDm ? placement : null}
-        onSelect={setSelection}
+        wallSelection={wallSelection}
+        wallDraw={isDm ? wallDraw : null}
+        onSelect={(sel) => {
+          setSelection(sel);
+          if (sel) setWallSelection(new Set());
+          else setWallSelection(new Set());
+        }}
+        onWallClick={selectWall}
+        onWallChain={chainSelectWall}
+        onWallEndpoint={(id, end, x, z, commit) => {
+          const w = tableWalls.find((row) => row.id === id);
+          if (!w) return;
+          const [ax, az, bx, bz] = end === 'a' ? [x, z, w.bx, w.bz] : [w.ax, w.az, x, z];
+          if (commit) {
+            wallThrottle.cancel();
+            reducers().updateWall({ wallId: id, ax, az, bx, bz, height: w.height, thickness: w.thickness });
+          } else {
+            wallThrottle.call(id, ax, az, bx, bz, w.height, w.thickness);
+          }
+        }}
+        onWallDrawPoint={(x, z) => {
+          if (!wallDraw) return;
+          if (!wallDraw.start) {
+            setWallDraw({ start: { x, z } });
+            return;
+          }
+          const s = wallDraw.start;
+          if (Math.hypot(x - s.x, z - s.z) < 0.05) return;
+          reducers().addWall({ tableId: table.id, ax: s.x, az: s.z, bx: x, bz: z, height: 2.5, thickness: 0.15 });
+          setWallDraw({ start: { x, z } });
+        }}
         onPlace={(x, z, rotY) => {
           if (!placement) return;
           reducers().spawnProp({
@@ -232,6 +337,14 @@ export default function App() {
           tableId={table.id}
           placement={placement}
           onArm={armPlacement}
+          wallDrawArmed={wallDraw !== null}
+          onArmWall={() => {
+            setWallDraw((w) => (w ? null : { start: null }));
+            setPlacement(null);
+            setWallSelection(new Set());
+          }}
+          selectedWalls={tableWalls.filter((w) => wallSelection.has(w.id))}
+          onClearWallSelection={() => setWallSelection(new Set())}
           selected={
             selection?.type === 'mini' ? (tableEntities.find((e) => e.id === selection.id) ?? null) : null
           }

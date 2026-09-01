@@ -6,12 +6,14 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddWallReducer from "../add_wall_reducer";
 import ClearLightsReducer from "../clear_lights_reducer";
 import ClearMapImageReducer from "../clear_map_image_reducer";
 import ClearWallsReducer from "../clear_walls_reducer";
 import CreateTableReducer from "../create_table_reducer";
 import DeleteEntityReducer from "../delete_entity_reducer";
 import DeletePropReducer from "../delete_prop_reducer";
+import DeleteWallReducer from "../delete_wall_reducer";
 import ImportLightsReducer from "../import_lights_reducer";
 import ImportWallsReducer from "../import_walls_reducer";
 import JoinTableReducer from "../join_table_reducer";
@@ -24,13 +26,16 @@ import SetPropHiddenReducer from "../set_prop_hidden_reducer";
 import SpawnEntityReducer from "../spawn_entity_reducer";
 import SpawnPropReducer from "../spawn_prop_reducer";
 import UpdatePropParamsReducer from "../update_prop_params_reducer";
+import UpdateWallReducer from "../update_wall_reducer";
 
+export type AddWallParams = __Infer<typeof AddWallReducer>;
 export type ClearLightsParams = __Infer<typeof ClearLightsReducer>;
 export type ClearMapImageParams = __Infer<typeof ClearMapImageReducer>;
 export type ClearWallsParams = __Infer<typeof ClearWallsReducer>;
 export type CreateTableParams = __Infer<typeof CreateTableReducer>;
 export type DeleteEntityParams = __Infer<typeof DeleteEntityReducer>;
 export type DeletePropParams = __Infer<typeof DeletePropReducer>;
+export type DeleteWallParams = __Infer<typeof DeleteWallReducer>;
 export type ImportLightsParams = __Infer<typeof ImportLightsReducer>;
 export type ImportWallsParams = __Infer<typeof ImportWallsReducer>;
 export type JoinTableParams = __Infer<typeof JoinTableReducer>;
@@ -43,4 +48,5 @@ export type SetPropHiddenParams = __Infer<typeof SetPropHiddenReducer>;
 export type SpawnEntityParams = __Infer<typeof SpawnEntityReducer>;
 export type SpawnPropParams = __Infer<typeof SpawnPropReducer>;
 export type UpdatePropParamsParams = __Infer<typeof UpdatePropParamsReducer>;
+export type UpdateWallParams = __Infer<typeof UpdateWallReducer>;
 
