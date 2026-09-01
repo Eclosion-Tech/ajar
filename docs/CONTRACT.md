@@ -57,11 +57,17 @@ Toolchain: `spacetimedb = "=2.0.3"` with `features = ["unstable"]` (row-level se
 Public, no RLS — players see walls. Import replaces: `import_walls` deletes the
 table's existing walls, then inserts the new set.
 
-Additional reducers (both DM-only, `Result<(), String>`):
+Additional reducers (all DM-only, `Result<(), String>`):
 - `import_walls(table_id: u64, walls: Vec<WallInput>)` — `WallInput` is a
   `SpacetimeType` struct `{ ax, az, bx, bz, height, thickness: f32 }`. Replace-all
   semantics. Reject > 4096 walls.
 - `clear_walls(table_id: u64)`
+- `add_wall(table_id: u64, ax, az, bx, bz, height, thickness: f32)` — single
+  segment, for the Sims-style wall-drawing tool. Finite-validated.
+- `update_wall(wall_id: u64, ax, az, bx, bz, height, thickness: f32)` — full-row
+  update, for endpoint drags and height/thickness edits (the imported-bar-as-wall
+  fix: select the run, drop height to counter height). Finite-validated.
+- `delete_wall(wall_id: u64)`
 
 ### `light` (synced from UVTT import; rendered as point lights)
 | column | type | notes |
