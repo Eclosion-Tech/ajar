@@ -61,6 +61,8 @@ export default function App() {
       120,
     ),
   ).current;
+  const lastWallClick = useRef<{ id: bigint; at: number } | null>(null);
+  const wallAnchor = useRef<bigint | null>(null);
 
   const table: GameTable | undefined = snap.tables.find((t) => t.slug === slug);
   const isDm = table ? sameIdentity(table.dmIdentity, snap.identity) : false;
@@ -95,9 +97,13 @@ export default function App() {
     }
   }, [slug]);
 
-  // Prune wall selection ids whose rows disappeared.
+  // Prune wall selection ids whose rows disappeared; drop the range-select
+  // anchor when the selection empties.
   useEffect(() => {
-    if (wallSelection.size === 0) return;
+    if (wallSelection.size === 0) {
+      wallAnchor.current = null;
+      return;
+    }
     const live = new Set([...wallSelection].filter((id) => snap.walls.some((w) => w.id === id)));
     if (live.size !== wallSelection.size) setWallSelection(live);
   }, [snap.walls, wallSelection]);
@@ -214,7 +220,44 @@ export default function App() {
     setWallSelection(new Set());
   };
 
-  const lastWallClick = useRef<{ id: bigint; at: number } | null>(null);
+  const wallsTouch = (a: (typeof tableWalls)[number], b: (typeof tableWalls)[number]) => {
+    const eps = 0.02;
+    const near = (x1: number, z1: number, x2: number, z2: number) => Math.hypot(x1 - x2, z1 - z2) < eps;
+    return (
+      near(a.ax, a.az, b.ax, b.az) ||
+      near(a.ax, a.az, b.bx, b.bz) ||
+      near(a.bx, a.bz, b.ax, b.az) ||
+      near(a.bx, a.bz, b.bx, b.bz)
+    );
+  };
+
+  // BFS shortest path through the wall graph, for click + shift-click range select.
+  const findWallPath = (fromId: bigint, toId: bigint): bigint[] | null => {
+    const parent = new Map<bigint, bigint | null>([[fromId, null]]);
+    const queue = [fromId];
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      if (cur === toId) break;
+      const w = tableWalls.find((row) => row.id === cur);
+      if (!w) continue;
+      for (const o of tableWalls) {
+        if (parent.has(o.id)) continue;
+        if (wallsTouch(w, o)) {
+          parent.set(o.id, cur);
+          queue.push(o.id);
+        }
+      }
+    }
+    if (!parent.has(toId)) return null;
+    const path: bigint[] = [];
+    let cur: bigint | null = toId;
+    while (cur !== null) {
+      path.push(cur);
+      cur = parent.get(cur) ?? null;
+    }
+    return path;
+  };
+
   const selectWall = (id: bigint, additive: boolean) => {
     setSelection(null);
     // Double-click detection lives here (not in the scene) because this is
@@ -226,6 +269,17 @@ export default function App() {
       lastWallClick.current = null;
       chainSelectWall(id);
       return;
+    }
+    const anchor = wallAnchor.current;
+    wallAnchor.current = id;
+    // Shift-click with an anchor: select the connected run between the two
+    // clicks (file-manager range select over the wall graph).
+    if (additive && anchor !== null && anchor !== id) {
+      const path = findWallPath(anchor, id);
+      if (path) {
+        setWallSelection((prevSel) => new Set([...prevSel, ...path]));
+        return;
+      }
     }
     setWallSelection((prevSel) => {
       const next = new Set(additive ? prevSel : []);
