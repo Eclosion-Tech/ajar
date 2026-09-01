@@ -26,7 +26,6 @@ type Props = {
   wallDraw: { start: { x: number; z: number } | null } | null;
   onSelect: (sel: Selection) => void;
   onWallClick: (id: bigint, additive: boolean) => void;
-  onWallChain: (id: bigint) => void;
   onWallEndpoint: (id: bigint, end: 'a' | 'b', x: number, z: number, commit: boolean) => void;
   onWallDrawPoint: (x: number, z: number) => void;
   onPlace: (x: number, z: number, rotY: number) => void;
@@ -152,7 +151,6 @@ function SceneContent({
   wallDraw,
   onSelect,
   onWallClick,
-  onWallChain,
   onWallEndpoint,
   onWallDrawPoint,
   onPlace,
@@ -351,7 +349,7 @@ function SceneContent({
             armed={modeArmed}
             selected={wallSelection.has(w.id)}
             onWallClick={onWallClick}
-            onWallChain={onWallChain}
+
           />
         ))}
       {isDm &&
@@ -616,17 +614,14 @@ function WallProxy({
   armed,
   selected,
   onWallClick,
-  onWallChain,
 }: {
   wall: Wall;
   armed: boolean;
   selected: boolean;
   onWallClick: (id: bigint, additive: boolean) => void;
-  onWallChain: (id: bigint) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const down = useRef<{ sx: number; sy: number } | null>(null);
-  const lastClickAt = useRef(0);
   useCursor(hovered && !armed);
   const t = wallTransform(wall.ax, wall.az, wall.bx, wall.bz);
   if (t.len < 0.01) return null;
@@ -645,16 +640,7 @@ function WallProxy({
         if (armed || e.button !== 0 || !d) return;
         if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= DRAG_THRESHOLD_PX) return;
         e.stopPropagation();
-        // Manual double-click detection — R3F's synthetic onDoubleClick is
-        // unreliable through raycast proxies.
-        const now = performance.now();
-        if (now - lastClickAt.current < 350) {
-          lastClickAt.current = 0;
-          onWallChain(wall.id);
-        } else {
-          lastClickAt.current = now;
-          onWallClick(wall.id, e.nativeEvent.shiftKey);
-        }
+        onWallClick(wall.id, e.nativeEvent.shiftKey);
       }}
       onPointerOver={(e) => {
         if (armed) return;

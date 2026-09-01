@@ -214,10 +214,21 @@ export default function App() {
     setWallSelection(new Set());
   };
 
+  const lastWallClick = useRef<{ id: bigint; at: number } | null>(null);
   const selectWall = (id: bigint, additive: boolean) => {
     setSelection(null);
-    setWallSelection((prev) => {
-      const next = new Set(additive ? prev : []);
+    // Double-click detection lives here (not in the scene) because this is
+    // the one place clicks provably arrive.
+    const prev = lastWallClick.current;
+    const now = performance.now();
+    lastWallClick.current = { id, at: now };
+    if (prev && prev.id === id && now - prev.at < 400) {
+      lastWallClick.current = null;
+      chainSelectWall(id);
+      return;
+    }
+    setWallSelection((prevSel) => {
+      const next = new Set(additive ? prevSel : []);
       if (additive && next.has(id)) next.delete(id);
       else next.add(id);
       return next;
@@ -269,7 +280,6 @@ export default function App() {
           else setWallSelection(new Set());
         }}
         onWallClick={selectWall}
-        onWallChain={chainSelectWall}
         onWallEndpoint={(id, end, x, z, commit) => {
           const w = tableWalls.find((row) => row.id === id);
           if (!w) return;

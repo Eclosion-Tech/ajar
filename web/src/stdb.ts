@@ -136,6 +136,10 @@ class Store {
       this.walls.set(row.id.toString(), row);
       this.bump();
     });
+    conn.db.wall.onUpdate((_ctx, _old, row) => {
+      this.walls.set(row.id.toString(), row);
+      this.bump();
+    });
     conn.db.wall.onDelete((_ctx, row) => {
       this.walls.delete(row.id.toString());
       this.bump();
