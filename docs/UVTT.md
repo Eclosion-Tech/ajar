@@ -1,8 +1,9 @@
-# UVTT Import — parser spec (delegation-ready, not yet built)
+# UVTT Import — Implementation Notes
 
-The v1 prep-cost answer: parse Universal VTT exports (`.dd2vtt` / `.uvtt` /
-`.df2vtt`, as produced by Dungeondraft and Dungeon Alchemist) and extrude a 3D
-room from the vector data they already contain. Parsing, not vision.
+The first prep-cost path is implemented: Universal VTT exports (`.dd2vtt`, `.uvtt`,
+and `.df2vtt`, as produced by tools such as Dungeondraft and Dungeon Alchemist) are
+parsed into wall segments, portal gaps, lights, and an optional floor image. The map's
+existing vector data creates the room; no vision model is needed for structural import.
 
 ## Input format (JSON)
 
@@ -25,12 +26,13 @@ Known fields (format versions ~0.2–1.0 are all shaped like this):
 }
 ```
 
-Tolerate missing optional fields; fail with a typed error, not a throw-string, on
-absent `resolution` or non-array `line_of_sight`.
+The parser tolerates missing optional fields and returns a typed error, rather than
+throwing a string, for absent `resolution`, invalid fields, or non-array
+`line_of_sight` data.
 
 ## Package shape
 
-`web/src/lib/uvtt/` — pure TypeScript, zero three.js imports, unit-testable:
+`web/src/lib/uvtt/parse.ts` is pure TypeScript with no Three.js imports:
 
 - `parse(json: unknown): UvttMap | UvttError` — validate + normalize into a typed
   model. Coordinates normalized to **world units where 1 grid square = 1 unit**,
@@ -44,19 +46,42 @@ absent `resolution` or non-array `line_of_sight`.
 - `imageBlob(map: UvttMap): Uint8Array | null` — decoded map image bytes for the
   ground-plane texture.
 
-Geometry realization (BufferGeometry from WallSegment[]) lives beside it in
-`web/src/lib/uvtt/geometry.ts` and may import three; keep it thin — box per
-segment is fine for the demo.
+Geometry realization lives in `web/src/lib/uvtt/geometry.ts`: it merges box geometry
+for all wall segments into one renderable `BufferGeometry`.
+
+## Import pipeline
+
+The DM toolbar owns the current end-to-end import:
+
+1. Parse the selected file and derive portal-subtracted wall segments.
+2. Use `line_of_sight` as structural walls. If it is empty, fall back to
+   `objects_line_of_sight`; small closed object outlines receive furniture-height
+   extrusion rather than full wall height.
+3. Center walls and lights around the scene origin, then call the DM-only
+   replace-all `import_walls` and `import_lights` reducers.
+4. Decode an embedded image, upload it to the development blob service, and upsert
+   its URL and world dimensions into `map_image`.
+5. Render the image as the floor, the walls as merged geometry, and a spread-limited
+   subset of imported lights as real point lights.
+
+The blob service is intentionally minimal and development-only. It accepts PNG, JPEG,
+or WebP bytes, stores them by SHA-256, and returns an immutable local URL.
 
 ## Tests
 
-Vitest. Fixtures: hand-write two small `.dd2vtt` JSON fixtures (a 4-wall room
-with one portal; an L-shaped polyline) rather than committing a real export.
-Assert: normalization/origin shift, portal gap subtraction (segment split into
-two), light color parsing, graceful rejection of malformed input.
+Vitest uses two hand-written fixtures: a four-wall room with a portal and an L-shaped
+polyline. Tests cover origin normalization, portal-gap subtraction, light color
+parsing, image decoding, and graceful rejection of malformed input.
 
-## Out of scope (for the parser delegation)
+## Current limitations
 
-Syncing imported geometry through SpacetimeDB (row design for walls + where the
-map image lives — STDB bytes row vs. blob store) is an integration decision made
-after the parser exists. The parser stays pure either way.
+- Portals become wall gaps; door meshes and door state do not exist yet.
+- A map import replaces walls and lights through separate reducer calls, not one
+  cross-table transaction.
+- If a file has no embedded image, or its blob upload fails, structural import still
+  succeeds. An existing floor image is left unchanged.
+- The local blob service returns `localhost` URLs and has no production auth,
+  retention, or object-storage integration.
+- Native `.dungeondraft_map` object extraction is not implemented.
+- The `#/lab` VLM harness can overlay proposed furniture detections, but detections
+  are not yet reviewed or converted into `prop` rows.

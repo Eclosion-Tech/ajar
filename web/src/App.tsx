@@ -8,6 +8,7 @@ import { throttled } from './throttle';
 import TableScene from './scene/TableScene';
 import Toolbar from './ui/Toolbar';
 import ImportLab from './lab/ImportLab';
+import DemoTable, { type DemoRole, type DemoShot } from './demo/DemoTable';
 
 function safeParseParams(json: string): Record<string, unknown> {
   try {
@@ -18,8 +19,19 @@ function safeParseParams(json: string): Record<string, unknown> {
   }
 }
 
-function useRoute(): { slug: string | null; lab: boolean } {
-  const read = () => ({ slug: parseSlug(), lab: window.location.hash.startsWith('#/lab') });
+function useRoute(): { slug: string | null; lab: boolean; demo: boolean; demoRole: DemoRole; demoShot: DemoShot } {
+  const read = () => {
+    const hash = window.location.hash;
+    const demo = hash.startsWith('#/demo');
+    const query = new URLSearchParams(hash.split('?')[1] ?? '');
+    return {
+      slug: parseSlug(),
+      lab: hash.startsWith('#/lab'),
+      demo,
+      demoRole: query.get('role') === 'player' ? 'player' as const : 'gm' as const,
+      demoShot: query.get('shot') === 'wide' ? 'wide' as const : 'hero' as const,
+    };
+  };
   const [route, setRoute] = useState(read);
   useEffect(() => {
     const onHash = () => setRoute(read());
@@ -37,7 +49,7 @@ function parseSlug(): string | null {
 
 export default function App() {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  const { slug, lab } = useRoute();
+  const { slug, lab, demo, demoRole, demoShot } = useRoute();
   const [name, setName] = useState(() => sessionStorage.getItem('display_name') ?? '');
   const [selection, setSelection] = useState<Selection>(null);
   const [placement, setPlacement] = useState<Placement>(null);
@@ -176,6 +188,10 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [slug, snap, selection, placement, wallSelection, wallDraw]);
+
+  // The showcase is a deterministic, server-free rendering of the real
+  // importer, scene, prop generators, lighting, and player visibility rules.
+  if (demo) return <DemoTable role={demoRole} shot={demoShot} />;
 
   // The import lab needs no table connection.
   if (lab) return <ImportLab />;

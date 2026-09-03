@@ -468,10 +468,21 @@ export function toWallSegments(map: UvttMap, opts: WallSegmentOptions = {}): Wal
   if (opts.includeObjects) {
     // Object outlines are usually furniture, not architecture. Extrude small
     // closed loops at furniture heights so candles and tables don't become
-    // full-height pillars; long/open runs (Arkenforge-style walls-as-objects)
-    // keep wall height.
+    // full-height pillars. Long, narrow closed loops are counters and shelves
+    // surprisingly often, so use their short axis as another furniture signal;
+    // open runs (Arkenforge-style walls-as-objects) keep wall height.
     for (const points of map.objectsLineOfSight) {
       let perimeter = 0;
+      let minX = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let minZ = Number.POSITIVE_INFINITY;
+      let maxZ = Number.NEGATIVE_INFINITY;
+      for (const point of points) {
+        minX = Math.min(minX, point.x);
+        maxX = Math.max(maxX, point.x);
+        minZ = Math.min(minZ, point.z);
+        maxZ = Math.max(maxZ, point.z);
+      }
       for (let i = 1; i < points.length; i += 1) {
         perimeter += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
       }
@@ -482,7 +493,9 @@ export function toWallSegments(map: UvttMap, opts: WallSegmentOptions = {}): Wal
         first !== undefined &&
         last !== undefined &&
         Math.hypot(first.x - last.x, first.z - last.z) < GEOMETRY_EPSILON;
-      const objectHeight = closed && perimeter < 2.5 ? 0.45 : closed && perimeter < 14 ? 0.9 : height;
+      const shortAxis = Math.min(maxX - minX, maxZ - minZ);
+      const furnitureOutline = closed && (perimeter < 14 || shortAxis < 1.5);
+      const objectHeight = closed && perimeter < 2.5 ? 0.45 : furnitureOutline ? 0.9 : height;
       sourced.push({ points, height: objectHeight });
     }
   }

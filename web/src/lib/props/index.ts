@@ -24,7 +24,7 @@ export { WOOD_TONES } from './palette';
  * The generator registry. A prop row is (kind, params JSON, seed); geometry is
  * derived deterministically on every client — the params ARE the asset.
  * Generators stay plain functions; this never grows into an authoring
- * framework (PROJECT.md footnote 1 discipline).
+ * framework.
  */
 export function buildProp(kind: string, paramsJson: string, seed: bigint | number): BufferGeometry | null {
   let raw: unknown = {};

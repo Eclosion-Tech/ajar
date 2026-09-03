@@ -82,4 +82,18 @@ describe('UVTT projections', () => {
   it('decodes the optional base64 map image', () => {
     expect(imageBlob(validMap(roomJson))).toEqual(Uint8Array.from([1, 2, 3, 4]));
   });
+
+  it('keeps long narrow closed object outlines at furniture height', () => {
+    const map = validMap(JSON.stringify({
+      resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 12, y: 4 } },
+      line_of_sight: [],
+      objects_line_of_sight: [[
+        { x: 1, y: 1 }, { x: 11, y: 1 }, { x: 11, y: 2 },
+        { x: 1, y: 2 }, { x: 1, y: 1 },
+      ]],
+    }));
+
+    expect(toWallSegments(map, { includeObjects: true })).toHaveLength(4);
+    expect(toWallSegments(map, { includeObjects: true }).every((segment) => segment.height === 0.9)).toBe(true);
+  });
 });

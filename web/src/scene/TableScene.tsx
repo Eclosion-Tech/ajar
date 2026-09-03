@@ -20,6 +20,7 @@ type Props = {
   mapImage: MapImage | null;
   props: Prop[];
   isDm: boolean;
+  canDrag?: (type: DragKind, id: bigint) => boolean;
   selection: Selection;
   placement: Placement;
   wallSelection: ReadonlySet<bigint>;
@@ -31,6 +32,9 @@ type Props = {
   onPlace: (x: number, z: number, rotY: number) => void;
   onDragMove: (type: DragKind, id: bigint, x: number, z: number) => void;
   onDragEnd: (type: DragKind, id: bigint, x: number, z: number) => void;
+  cameraPosition?: [number, number, number];
+  cameraTarget?: [number, number, number];
+  cameraFov?: number;
 };
 
 // Forward rendering pays for every light on every fragment: keep only the
@@ -129,7 +133,7 @@ export default function TableScene(props: Props) {
   return (
     <Canvas
       className="scene"
-      camera={{ position: [8, 10, 8], fov: 50 }}
+      camera={{ position: props.cameraPosition ?? [8, 10, 8], fov: props.cameraFov ?? 50 }}
       // WebGPU with three's built-in WebGL2 backend fallback; built-in materials
       // are converted automatically, so no GLSL ShaderMaterials in this tree.
       gl={async (glProps) => {
@@ -150,6 +154,7 @@ function SceneContent({
   mapImage,
   props,
   isDm,
+  canDrag,
   selection,
   placement,
   wallSelection,
@@ -161,6 +166,7 @@ function SceneContent({
   onPlace,
   onDragMove,
   onDragEnd,
+  cameraTarget,
 }: Props) {
   const lit = lights.length > 0;
   const realLights = useMemo(() => {
@@ -204,6 +210,7 @@ function SceneContent({
     group: THREE.Group | null,
   ) => {
     if (e.button !== 0 || !group || drag.current) return;
+    if (canDrag && !canDrag(type, id)) return;
     if (type === 'prop' && !isDm) {
       // players can select props but not move them
       onSelect({ type, id });
@@ -398,7 +405,7 @@ function SceneContent({
           dragApi={dragApi}
         />
       ))}
-      <OrbitControls makeDefault maxPolarAngle={Math.PI / 2.1} />
+      <OrbitControls makeDefault target={cameraTarget ?? [0, 0, 0]} maxPolarAngle={Math.PI / 2.1} />
     </>
   );
 }

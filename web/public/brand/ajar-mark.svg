@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Ajar open doorway mark</title>
+  <path fill="#f7f2e7" fill-rule="evenodd" d="M7 60V29C7 14.64 18.19 3 32 3s25 11.64 25 26v31H46V29c0-8.84-6.27-16-14-16s-14 7.16-14 16v31H7Z"/>
+  <path fill="#efbd72" d="M18 60V29c0-8.84 6.27-16 14-16s14 7.16 14 16v31H18Z"/>
+  <path fill="#b86f4d" d="M27 53V29c0-8.84 3.58-16 8-16 6.08 0 11 7.16 11 16v31l-19-7Z"/>
+  <path fill="#824b36" d="M27 53V29c0-7.2 2.38-13.3 5.68-15.3L36 13c-3.7 3.5-6 9.5-6 16v25.1L27 53Z"/>
+  <circle cx="33.5" cy="39.5" r="2" fill="#f7f2e7"/>
+</svg>

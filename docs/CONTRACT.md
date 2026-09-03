@@ -1,16 +1,18 @@
-# Walking Skeleton — Module Contract
+# Current Module Contract
 
 The coordination contract between `server/spacetimedb` (Rust STDB module) and `web/`
 (client). Change this file first; code follows it.
 
-**Scope:** the validation-demo vertical slice. Two browser tabs, one table: create a
-table, join by slug, spawn minis, move them (synced live), DM hides/reveals a monster
-that players cannot see. Nothing else — no chat, dice, turn tracker, or UVTT import yet.
+**Scope:** the pre-validation demo prototype. Two browser tabs can create/join a table,
+move synced minis, enforce DM-only hidden rows, import and edit UVTT-derived geometry,
+render synced lights and a blob-backed floor image, and place/edit deterministic
+procedural props. Chat, dice, turn tracking, table-scoped guest credentials, and
+production lifecycle infrastructure are not implemented.
 
 Toolchain: `spacetimedb = "=2.0.3"` with `features = ["unstable"]` (row-level security),
 `crate-type = ["cdylib"]`. Mirrors the Pear module's conventions.
 
-## Tables (all `public`; RLS restricts `entity`)
+## Tables (all `public`; RLS restricts `entity` and `prop`)
 
 ### `game_table`
 | column | type | notes |
@@ -123,7 +125,7 @@ transform poisons every client's render.
 
 ## Row-level security (the product feature)
 
-Two union-ed filters on `entity`, Pear idiom:
+Two union-ed filters each on `entity` and `prop`, using the Pear idiom:
 
 ```rust
 #[client_visibility_filter]
@@ -131,10 +133,17 @@ const ENTITY_VISIBLE: Filter = Filter::Sql("SELECT * FROM entity WHERE hidden = 
 
 #[client_visibility_filter]
 const ENTITY_DM: Filter = Filter::Sql("SELECT * FROM entity WHERE dm_identity = :sender");
+
+#[client_visibility_filter]
+const PROP_VISIBLE: Filter = Filter::Sql("SELECT * FROM prop WHERE hidden = false");
+
+#[client_visibility_filter]
+const PROP_DM: Filter = Filter::Sql("SELECT * FROM prop WHERE dm_identity = :sender");
 ```
 
-Players never receive hidden rows — hiding is server-side, not a client render flag.
-`game_table` and `participant` stay fully public for the skeleton.
+Players never receive hidden entity or prop rows — hiding is server-side, not a client
+render flag. `game_table`, `participant`, `wall`, `light`, and `map_image` remain fully
+public in the current prototype.
 
 ## Reducers (all return `Result<(), String>`)
 
@@ -159,9 +168,17 @@ Players never receive hidden rows — hiding is server-side, not a client render
 
 ## Client wiring (info for web/, not the module)
 
-- Connection: `@clockworklabs/spacetimedb-sdk`, module name `3dvtt` on local
-  `spacetime start` (default `http://localhost:3000`).
+- Connection: the `spacetimedb` TypeScript package, database name `3dvtt` on local
+  `spacetime start` (default WebSocket URI `ws://localhost:3000`). Each browser tab
+  keeps its anonymous identity token in `sessionStorage`, deliberately making the
+  two-tab demo produce distinct DM and player identities.
 - Bindings generated with
-  `spacetime generate --lang typescript --out-dir web/src/module_bindings --project-path server/spacetimedb`.
-- Client subscribes per table: `SELECT * FROM entity WHERE table_id = ...` etc. RLS
-  intersects with subscriptions server-side.
+  `spacetime generate --lang typescript --out-dir web/src/module_bindings --module-path server/spacetimedb`.
+- The prototype currently subscribes to every public table and filters rows by
+  `table_id` in the client. RLS still intersects with those subscriptions server-side.
+  Per-table subscriptions are deferred until scale makes them necessary.
+- Reducer-driven drag and slider updates are throttled; the exact final transform is
+  sent on release. Local ghosts and drag previews never become database rows.
+- The renderer is React Three Fiber with Three.js `WebGPURenderer` and its WebGL2
+  backend fallback. Walls render as merged geometry while per-wall invisible proxies
+  provide selection and editing.

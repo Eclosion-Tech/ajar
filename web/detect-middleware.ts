@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
  * Runs server-side in the vite dev process so credentials never reach the
  * browser. The zero-arg SDK client resolves ANTHROPIC_API_KEY or an
  * `ant auth login` profile automatically. The hosted product will do this
- * behind its own API; self-hosters bring their own key (PROJECT.md).
+ * behind its own API; self-hosters bring their own key.
  */
 
 const MODEL = 'claude-opus-5';

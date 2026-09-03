@@ -4,7 +4,7 @@ import { WOOD_TONES } from './palette';
  * The prop catalog: the one place that knows which kinds exist and how to
  * roll a fresh draft of params for each. Palette, ghost placement, and
  * duplication all consume this. Kept deliberately tiny — a lookup, not a
- * framework (PROJECT.md footnote 1).
+ * framework.
  */
 export const PROP_KINDS = ['table', 'seat', 'barrel', 'crate', 'chest'] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
